@@ -1,0 +1,384 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model PersonDocument {
+  id             Int       @id @default(autoincrement())
+  documentNumber String    @map("document_number") @db.VarChar(20)
+  documentType   String    @map("document_type") @db.VarChar(50)
+  description    String?   @db.VarChar(200)
+  issueDate      DateTime? @map("issue_date") @db.Date
+  expiryDate     DateTime? @map("expiry_date") @db.Date
+  fileUrl        String?   @map("file_url") @db.VarChar(200)
+  status         String?   @db.VarChar(20)
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  personDocumentLinks PersonDocumentLink[]
+  guardians           Guardian[]
+  documentAlerts      DocumentAlert[]      @relation("PersonDocumentAlerts")
+
+  @@map("PERSON_DOCUMENT")
+}
+
+model PersonDocumentLink {
+  id               Int      @id @default(autoincrement())
+  personId         Int      @map("person_id")
+  personDocumentId Int      @map("person_document_id")
+  documentRole     String?  @map("document_role") @db.VarChar(50)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  person         Person         @relation(fields: [personId], references: [id])
+  personDocument PersonDocument @relation(fields: [personDocumentId], references: [id])
+
+  @@unique([personId, personDocumentId])
+  @@index([personId])
+  @@index([personDocumentId])
+  @@map("PERSON_DOCUMENT_LINK")
+}
+
+model Guardian {
+  id             Int      @id @default(autoincrement())
+  documentId     Int      @map("document_id")
+  firstName      String   @map("first_name") @db.VarChar(50)
+  middleName     String?  @map("middle_name") @db.VarChar(50)
+  firstLastname  String   @map("first_lastname") @db.VarChar(50)
+  secondLastname String?  @map("second_lastname") @db.VarChar(50)
+  phone          String?  @db.VarChar(20)
+  email          String?  @db.VarChar(100)
+  status         String?  @db.VarChar(20)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  document PersonDocument @relation(fields: [documentId], references: [id])
+  persons  Person[]
+
+  @@index([documentId])
+  @@map("GUARDIAN")
+}
+
+model Person {
+  id             Int      @id @default(autoincrement())
+  guardianId     Int?     @map("guardian_id")
+  firstName      String   @map("first_name") @db.VarChar(50)
+  middleName     String?  @map("middle_name") @db.VarChar(50)
+  firstLastname  String   @map("first_lastname") @db.VarChar(50)
+  secondLastname String?  @map("second_lastname") @db.VarChar(50)
+  phone          String?  @db.VarChar(20)
+  email          String?  @db.VarChar(100)
+  status         String?  @db.VarChar(20)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  guardian            Guardian?            @relation(fields: [guardianId], references: [id])
+  personDocumentLinks PersonDocumentLink[]
+  users               User[]
+  personAddresses     PersonAddress[]
+  routeAssignments    RouteAssignment[]
+  drivenRoutes        Route[]
+  tripsAsDriver       Trip[]
+  documentAlerts      DocumentAlert[]      @relation("PersonAlerts")
+
+  @@index([guardianId])
+  @@map("PERSON")
+}
+
+model Role {
+  id   Int    @id @default(autoincrement())
+  name String @db.VarChar(50)
+
+  users User[]
+
+  @@map("ROLE")
+}
+
+model User {
+  id            Int      @id @default(autoincrement())
+  email         String   @db.VarChar(100)
+  password      String   @db.VarChar(255)
+  personId      Int      @map("person_id")
+  roleId        Int      @map("role_id")
+  status        String?  @db.VarChar(20)
+  pickupEnabled Boolean  @default(false) @map("pickup_enabled")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  person             Person      @relation(fields: [personId], references: [id])
+  role               Role        @relation(fields: [roleId], references: [id])
+  reviewedChecklists Checklist[]
+
+  @@unique([email])
+  @@index([personId])
+  @@index([roleId])
+  @@map("USER")
+}
+
+model Address {
+  id        Int      @id @default(autoincrement())
+  address   String   @db.VarChar(200)
+  latitude  Decimal  @db.Decimal(10, 7)
+  longitude Decimal  @db.Decimal(10, 7)
+  status    String?  @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  personAddresses PersonAddress[]
+  headquarters    Headquarters?
+
+  @@map("ADDRESS")
+}
+
+model PersonAddress {
+  id        Int      @id @default(autoincrement())
+  personId  Int      @map("person_id")
+  addressId Int      @map("address_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  person  Person  @relation(fields: [personId], references: [id])
+  address Address @relation(fields: [addressId], references: [id])
+
+  routeAssignments RouteAssignment[]
+
+  @@unique([personId, addressId])
+  @@index([personId])
+  @@index([addressId])
+  @@map("PERSON_ADDRESS")
+}
+
+model Headquarters {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(100)
+  addressId   Int      @unique @map("address_id")
+  description String?  @db.VarChar(200)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  address Address @relation(fields: [addressId], references: [id])
+
+  routeAssignmentHeadquarters RouteAssignmentHeadquarters[]
+
+  @@map("HEADQUARTERS")
+}
+
+model VehicleDocument {
+  id             Int       @id @default(autoincrement())
+  documentType   String    @map("document_type") @db.VarChar(50)
+  documentNumber String    @map("document_number") @db.VarChar(100)
+  issueDate      DateTime? @map("issue_date") @db.Date
+  expiryDate     DateTime? @map("expiry_date") @db.Date
+  fileUrl        String?   @map("file_url") @db.VarChar(200)
+  status         String?   @db.VarChar(20)
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  vehicleAsSoat                Vehicle? @relation("VehicleSoat")
+  vehicleAsTechnicalInspection Vehicle? @relation("VehicleTechnicalInspection")
+  vehicleAsInsurance           Vehicle? @relation("VehicleInsurance")
+  vehicleAsPropertyCard        Vehicle? @relation("VehiclePropertyCard")
+
+  documentAlerts DocumentAlert[] @relation("VehicleDocumentAlerts")
+
+  @@map("VEHICLE_DOCUMENT")
+}
+
+model Vehicle {
+  plate                 String   @id @db.VarChar(20)
+  passengerCapacity     Int      @map("passenger_capacity")
+  brand                 String?  @db.VarChar(50)
+  model                 String?  @db.VarChar(50)
+  year                  Int?
+  status                String?  @db.VarChar(20)
+  soatId                Int?     @unique @map("soat_id")
+  technicalInspectionId Int?     @unique @map("technical_inspection_id")
+  insuranceId           Int?     @unique @map("insurance_id")
+  propertyCardId        Int?     @unique @map("property_card_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  soat                VehicleDocument? @relation("VehicleSoat", fields: [soatId], references: [id])
+  technicalInspection VehicleDocument? @relation("VehicleTechnicalInspection", fields: [technicalInspectionId], references: [id])
+  insurance           VehicleDocument? @relation("VehicleInsurance", fields: [insuranceId], references: [id])
+  propertyCard        VehicleDocument? @relation("VehiclePropertyCard", fields: [propertyCardId], references: [id])
+
+  routes         Route[]
+  trips          Trip[]
+  checklists     Checklist[]
+  documentAlerts DocumentAlert[]        @relation("VehicleAlerts")
+  statusHistory  VehicleStatusHistory[]
+
+  @@map("VEHICLE")
+}
+
+model Route {
+  id             Int      @id @default(autoincrement())
+  name           String   @db.VarChar(100)
+  startTime      DateTime @map("start_time") @db.Time(6)
+  endTime        DateTime @map("end_time") @db.Time(6)
+  status         String?  @db.VarChar(20)
+  vehiclePlate   String?  @map("vehicle_plate") @db.VarChar(20)
+  driverPersonId Int?     @map("driver_person_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  vehicle Vehicle? @relation(fields: [vehiclePlate], references: [plate])
+  driver  Person?  @relation(fields: [driverPersonId], references: [id])
+
+  stops            Stop[]
+  routeAssignments RouteAssignment[]
+  trips            Trip[]
+
+  @@index([vehiclePlate])
+  @@index([driverPersonId])
+  @@map("ROUTE")
+}
+
+model Stop {
+  id            Int      @id @default(autoincrement())
+  routeId       Int      @map("route_id")
+  stopOrder     Int      @map("order")
+  description   String?  @db.VarChar(150)
+  latitude      Decimal  @db.Decimal(10, 7)
+  longitude     Decimal  @db.Decimal(10, 7)
+  estimatedTime DateTime @map("estimated_time") @db.Time(6)
+
+  route Route @relation(fields: [routeId], references: [id])
+
+  routeAssignments RouteAssignment[]
+
+  @@index([routeId])
+  @@map("STOP")
+}
+
+model RouteAssignment {
+  id              Int       @id @default(autoincrement())
+  personId        Int       @map("person_id")
+  routeId         Int       @map("route_id")
+  stopId          Int       @map("stop_id")
+  personAddressId Int       @map("person_address_id")
+  startDate       DateTime? @map("start_date") @db.Date
+  endDate         DateTime? @map("end_date") @db.Date
+  status          String?   @db.VarChar(20)
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  person        Person        @relation(fields: [personId], references: [id])
+  route         Route         @relation(fields: [routeId], references: [id])
+  stop          Stop          @relation(fields: [stopId], references: [id])
+  personAddress PersonAddress @relation(fields: [personAddressId], references: [id])
+
+  routeAssignmentHeadquarters RouteAssignmentHeadquarters[]
+
+  @@index([personId])
+  @@index([routeId])
+  @@index([stopId])
+  @@index([personAddressId])
+  @@map("ROUTE_ASSIGNMENT")
+}
+
+model RouteAssignmentHeadquarters {
+  id                Int      @id @default(autoincrement())
+  routeAssignmentId Int      @map("route_assignment_id")
+  headquartersId    Int      @map("headquarters_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  routeAssignment RouteAssignment @relation(fields: [routeAssignmentId], references: [id])
+  headquarters    Headquarters    @relation(fields: [headquartersId], references: [id])
+
+  @@unique([routeAssignmentId, headquartersId])
+  @@index([routeAssignmentId])
+  @@index([headquartersId])
+  @@map("ROUTE_ASSIGNMENT_HEADQUARTERS")
+}
+
+model Trip {
+  id             Int       @id @default(autoincrement())
+  routeId        Int       @map("route_id")
+  vehiclePlate   String    @map("vehicle_plate") @db.VarChar(20)
+  driverPersonId Int       @map("driver_person_id")
+  tripDate       DateTime  @map("trip_date") @db.Date
+  status         String?   @db.VarChar(20)
+  startedAt      DateTime? @map("started_at")
+  endedAt        DateTime? @map("ended_at")
+  observations   String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  route   Route   @relation(fields: [routeId], references: [id])
+  vehicle Vehicle @relation(fields: [vehiclePlate], references: [plate])
+  driver  Person  @relation(fields: [driverPersonId], references: [id])
+
+  checklist Checklist?
+
+  @@index([routeId])
+  @@index([vehiclePlate])
+  @@index([driverPersonId])
+  @@map("TRIP")
+}
+
+model Checklist {
+  id                  Int      @id @default(autoincrement())
+  tripId              Int      @unique @map("trip_id")
+  vehiclePlate        String   @map("vehicle_plate") @db.VarChar(20)
+  reviewedByUserId    Int      @map("reviewed_by_user_id")
+  status              String?  @db.VarChar(20)
+  generalObservations String?  @map("general_observations")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  trip           Trip    @relation(fields: [tripId], references: [id])
+  vehicle        Vehicle @relation(fields: [vehiclePlate], references: [plate])
+  reviewedByUser User    @relation(fields: [reviewedByUserId], references: [id])
+
+  items ChecklistItem[]
+
+  @@index([vehiclePlate])
+  @@index([reviewedByUserId])
+  @@map("CHECKLIST")
+}
+
+model ChecklistItem {
+  id           Int     @id @default(autoincrement())
+  checklistId  Int     @map("checklist_id")
+  itemName     String  @map("item_name") @db.VarChar(100)
+  passed       Boolean
+  observations String?
+
+  checklist Checklist @relation(fields: [checklistId], references: [id])
+
+  @@index([checklistId])
+  @@map("CHECKLIST_ITEM")
+}
+
+model DocumentAlert {
+  id                 Int       @id @default(autoincrement())
+  vehicleDocumentId  Int?      @map("vehicle_document_id")
+  vehiclePlate       String?   @map("vehicle_plate") @db.VarChar(20)
+  personDocumentId   Int?      @map("person_document_id")
+  personId           Int?      @map("person_id")
+  alertType          String?   @map("alert_type") @db.VarChar(50)
+  message            String?
+  documentExpiryDate DateTime? @map("document_expiry_date") @db.Date
+  daysRemaining      Int?      @map("days_remaining")
+  isRead             Boolean   @default(false) @map("is_read")
+  generatedAt        DateTime  @default(now()) @map("generated_at")
+  readAt             DateTime? @map("read_at")
+
+  vehicleDocument VehicleDocument? @relation("VehicleDocumentAlerts", fields: [vehicleDocumentId], references: [id])
+  vehicle         Vehicle?         @relation("VehicleAlerts", fields: [vehiclePlate], references: [plate])
+  personDocument  PersonDocument?  @relation("PersonDocumentAlerts", fields: [personDocumentId], references: [id])
+  person          Person?          @relation("PersonAlerts", fields: [personId], references: [id])
+
+  @@index([vehicleDocumentId])
+  @@index([vehiclePlate])
+  @@index([personDocumentId])
+  @@index([personId])
+  @@map("DOCUMENT_ALERT")
+}
+
+model VehicleStatusHistory {
+  id              Int      @id @default(autoincrement())
+  vehiclePlate    String   @map("vehicle_plate") @db.VarChar(20)
+  previousStatus  String?  @map("previous_status") @db.VarChar(20)
+  newStatus       String?  @map("new_status") @db.VarChar(20)
+  reason          String?
+  responsibleUser String?  @map("responsible_user") @db.VarChar(100)
+  changedAt       DateTime @default(now()) @map("changed_at")
+
+  vehicle Vehicle @relation(fields: [vehiclePlate], references: [plate])
+
+  @@index([vehiclePlate])
+  @@map("VEHICLE_STATUS_HISTORY")
+}

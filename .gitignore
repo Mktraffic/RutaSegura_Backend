@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Prisma generated client output
+/generated/
+
+# Application-specific context files
+/Contexto/
+
+# Prisma local/dev artifacts
+prisma/dev.db
+prisma/dev.db-journal
+prisma/*.db
+prisma/*.db-journal
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Caches
+.cache/
+.eslintcache
+
+# IDE/editor settings
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# OS/editor artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
