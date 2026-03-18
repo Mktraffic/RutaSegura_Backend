@@ -9,7 +9,10 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main.js",
-    "test": "echo \"No tests configured yet\""
+    "test": "echo \"No tests configured yet\"",
+    "prisma": {
+      "seed": "ts-node prisma/seed.ts"
+    }
   },
   "repository": {
     "type": "git",
