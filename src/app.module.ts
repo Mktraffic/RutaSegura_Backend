@@ -4,10 +4,12 @@ import { AppController } from "./app.controller";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 import { RolesGuard } from "./common/guards/roles.guard";
 import { AuthModule } from "./modules/auth/auth.module";
+import { GuardiansModule } from "./modules/guardians/guardians.module";
+import { StudentsModule } from "./modules/students/students.module";
 import { PrismaModule } from "./prisma/prisma.module";
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, GuardiansModule, StudentsModule],
   controllers: [AppController],
   providers: [
     {
