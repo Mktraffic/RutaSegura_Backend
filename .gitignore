@@ -16,6 +16,9 @@ node_modules/
 # Application-specific context files
 /Contexto/
 
+# Application-specific context files
+/prescriptions-backend-main/
+
 # Prisma local/dev artifacts
 prisma/dev.db
 prisma/dev.db-journal
