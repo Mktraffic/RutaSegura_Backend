@@ -4,7 +4,7 @@ import { CreateGuardianDto } from "./dto/create-guardian.dto";
 import { GuardiansService } from "./guardians.service";
 
 @Controller("guardians")
-@Roles("coordinator", "coordinador")
+@Roles("admin", "coordinator", "coordinador")
 export class GuardiansController {
   constructor(private readonly guardiansService: GuardiansService) {}
 

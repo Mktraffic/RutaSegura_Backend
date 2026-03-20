@@ -15,7 +15,7 @@ import { CreateStudentDto, UpdateStudentDto } from "./dto/student.dto";
 import { StudentsService } from "./students.service";
 
 @Controller("students")
-@Roles("coordinator", "coordinador")
+@Roles("admin", "coordinator", "coordinador")
 export class StudentsController {
   constructor(private readonly studentsService: StudentsService) {}
 
