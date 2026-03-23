@@ -6,6 +6,33 @@ import { CreateGuardianDto } from "./dto/create-guardian.dto";
 export class GuardiansService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async findAll(query?: string) {
+    return this.prisma.guardian.findMany({
+      where: query
+        ? {
+            OR: [
+              { firstName: { contains: query, mode: "insensitive" } },
+              { middleName: { contains: query, mode: "insensitive" } },
+              { firstLastname: { contains: query, mode: "insensitive" } },
+              { secondLastname: { contains: query, mode: "insensitive" } },
+              { email: { contains: query, mode: "insensitive" } },
+            ],
+          }
+        : undefined,
+      orderBy: [{ firstName: "asc" }, { firstLastname: "asc" }],
+      select: {
+        id: true,
+        firstName: true,
+        middleName: true,
+        firstLastname: true,
+        secondLastname: true,
+        email: true,
+        phone: true,
+        status: true,
+      },
+    });
+  }
+
   async create(dto: CreateGuardianDto) {
     const existingDocument = await this.prisma.personDocument.findFirst({
       where: {
