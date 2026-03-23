@@ -86,7 +86,7 @@ export class StudentsService {
 
   async update(id: number, dto: UpdateStudentDto) {
     await this.ensureStudentExists(id);
-    await this.validateUpdateBusinessRules(dto);
+    await this.validateUpdateBusinessRules(id, dto);
 
     const student = await this.prisma.$transaction(async (tx) => {
       await tx.person.update({
@@ -104,29 +104,46 @@ export class StudentsService {
       });
 
       if (dto.document) {
-        const document = await tx.personDocument.create({
-          data: {
-            documentType: dto.document.documentType,
-            documentNumber: dto.document.documentNumber,
-            description: dto.document.description,
-            status: "ACTIVE",
-          },
+        const existingLink = await tx.personDocumentLink.findFirst({
+          where: { personId: id },
+          orderBy: { id: "asc" },
+          select: { id: true, personDocumentId: true },
         });
 
-        if (dto.document.createPersonDocumentLink) {
-          await tx.personDocumentLink.create({
+        if (existingLink) {
+          await tx.personDocument.update({
+            where: { id: existingLink.personDocumentId },
             data: {
-              personId: id,
-              personDocumentId: document.id,
-              documentRole: dto.document.documentRole ?? "student",
+              documentType: dto.document.documentType,
+              documentNumber: dto.document.documentNumber,
+              description: dto.document.description,
+              status: "ACTIVE",
             },
           });
+        } else {
+          const document = await tx.personDocument.create({
+            data: {
+              documentType: dto.document.documentType,
+              documentNumber: dto.document.documentNumber,
+              description: dto.document.description,
+              status: "ACTIVE",
+            },
+          });
+
+          if (dto.document.createPersonDocumentLink ?? true) {
+            await tx.personDocumentLink.create({
+              data: {
+                personId: id,
+                personDocumentId: document.id,
+                documentRole: dto.document.documentRole ?? "student",
+              },
+            });
+          }
         }
       }
 
       if (dto.addresses) {
-        await tx.personAddress.deleteMany({ where: { personId: id } });
-        await this.syncAddresses(tx, id, dto.addresses);
+        await this.reconcileAddresses(tx, id, dto.addresses);
       }
 
       return this.findOneByIdInternal(tx, id);
@@ -225,12 +242,97 @@ export class StudentsService {
             })
           ).id;
 
-      await tx.personAddress.create({
-        data: {
+      await tx.personAddress.upsert({
+        where: {
+          personId_addressId: {
+            personId,
+            addressId,
+          },
+        },
+        create: {
           personId,
           addressId,
         },
+        update: {},
       });
+    }
+  }
+
+  private async reconcileAddresses(
+    tx: Prisma.TransactionClient,
+    personId: number,
+    addresses: Array<{ address: string; latitude: number; longitude: number }>,
+  ) {
+    const targetAddressIds: number[] = [];
+
+    for (const item of addresses) {
+      const existingAddress = await tx.address.findFirst({
+        where: {
+          address: item.address,
+          latitude: item.latitude,
+          longitude: item.longitude,
+        },
+        select: { id: true },
+      });
+
+      const addressId = existingAddress
+        ? existingAddress.id
+        : (
+            await tx.address.create({
+              data: {
+                address: item.address,
+                latitude: item.latitude,
+                longitude: item.longitude,
+                status: "ACTIVE",
+              },
+              select: { id: true },
+            })
+          ).id;
+
+      targetAddressIds.push(addressId);
+    }
+
+    const existingPersonAddresses = await tx.personAddress.findMany({
+      where: { personId },
+      select: {
+        id: true,
+        addressId: true,
+        routeAssignments: {
+          select: { id: true },
+        },
+      },
+    });
+
+    const uniqueTargetAddressIds = new Set(targetAddressIds);
+    const existingAddressIdSet = new Set(existingPersonAddresses.map((item) => item.addressId));
+
+    for (const item of existingPersonAddresses) {
+      if (!uniqueTargetAddressIds.has(item.addressId)) {
+        if (item.routeAssignments.length > 0) {
+          throw new BadRequestException({
+            success: false,
+            message: "No se pudo actualizar el estudiante",
+            errors: [
+              "No puedes eliminar una direccion que tiene asignaciones de ruta activas o historicas",
+            ],
+          });
+        }
+
+        await tx.personAddress.delete({
+          where: { id: item.id },
+        });
+      }
+    }
+
+    for (const addressId of uniqueTargetAddressIds) {
+      if (!existingAddressIdSet.has(addressId)) {
+        await tx.personAddress.create({
+          data: {
+            personId,
+            addressId,
+          },
+        });
+      }
     }
   }
 
@@ -285,7 +387,10 @@ export class StudentsService {
     }
   }
 
-  private async validateUpdateBusinessRules(dto: UpdateStudentDto) {
+  private async validateUpdateBusinessRules(
+    studentId: number,
+    dto: UpdateStudentDto,
+  ) {
     const errors: string[] = [];
 
     if (dto.guardianId) {
@@ -303,6 +408,9 @@ export class StudentsService {
         where: {
           documentType: dto.document.documentType,
           documentNumber: dto.document.documentNumber,
+          personDocumentLinks: {
+            none: { personId: studentId },
+          },
         },
         select: { id: true },
       });
