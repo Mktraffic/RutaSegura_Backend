@@ -6,6 +6,30 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─────────────────────────────────────────────
+// ZONAS GEOGRÁFICAS
+// Divide la ciudad en zonas para asignación de rutas
+// ─────────────────────────────────────────────
+
+model Zone {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(200)
+  status      String?  @db.VarChar(20)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  addresses Address[]
+  routes    Route[]
+
+  @@map("ZONE")
+}
+
+// ─────────────────────────────────────────────
+// DOCUMENTACIÓN DE PERSONAS
+// documentType: CEDULA | TARJETA_IDENTIDAD | LICENCIA_CONDUCCION
+// status: ACTIVE | INACTIVE | EXPIRED
+// ─────────────────────────────────────────────
+
 model PersonDocument {
   id             Int       @id @default(autoincrement())
   documentNumber String    @map("document_number") @db.VarChar(20)
@@ -40,6 +64,11 @@ model PersonDocumentLink {
   @@map("PERSON_DOCUMENT_LINK")
 }
 
+// ─────────────────────────────────────────────
+// ACUDIENTES
+// No tienen acceso al sistema, son solo datos de contacto
+// ─────────────────────────────────────────────
+
 model Guardian {
   id             Int      @id @default(autoincrement())
   documentId     Int      @map("document_id")
@@ -59,8 +88,15 @@ model Guardian {
   @@map("GUARDIAN")
 }
 
+// ─────────────────────────────────────────────
+// PERSONAS
+// personType: STUDENT | DRIVER | COORDINATOR
+// Los estudiantes no tienen User asociado
+// ─────────────────────────────────────────────
+
 model Person {
   id             Int      @id @default(autoincrement())
+  personType     String   @map("person_type") @db.VarChar(20)
   guardianId     Int?     @map("guardian_id")
   firstName      String   @map("first_name") @db.VarChar(50)
   middleName     String?  @map("middle_name") @db.VarChar(50)
@@ -81,8 +117,14 @@ model Person {
   documentAlerts      DocumentAlert[]      @relation("PersonAlerts")
 
   @@index([guardianId])
+  @@index([personType])
   @@map("PERSON")
 }
+
+// ─────────────────────────────────────────────
+// ROLES Y USUARIOS
+// Role.name: COORDINATOR | DRIVER
+// ─────────────────────────────────────────────
 
 model Role {
   id   Int    @id @default(autoincrement())
@@ -113,25 +155,40 @@ model User {
   @@map("USER")
 }
 
+// ─────────────────────────────────────────────
+// DIRECCIONES Y SEDES
+// zoneId indica a qué zona pertenece la dirección,
+// lo que permite validar que la dirección del estudiante
+// coincida con la zona de la ruta asignada
+// ─────────────────────────────────────────────
+
 model Address {
   id        Int      @id @default(autoincrement())
   address   String   @db.VarChar(200)
   latitude  Decimal  @db.Decimal(10, 7)
   longitude Decimal  @db.Decimal(10, 7)
+  zoneId    Int?     @map("zone_id")
   status    String?  @db.VarChar(20)
   createdAt DateTime @default(now()) @map("created_at")
 
+  zone            Zone?         @relation(fields: [zoneId], references: [id])
   personAddresses PersonAddress[]
   headquarters    Headquarters?
 
+  @@index([zoneId])
   @@map("ADDRESS")
 }
 
 model PersonAddress {
-  id        Int      @id @default(autoincrement())
-  personId  Int      @map("person_id")
-  addressId Int      @map("address_id")
-  createdAt DateTime @default(now()) @map("created_at")
+  id           Int      @id @default(autoincrement())
+  personId     Int      @map("person_id")
+  addressId    Int      @map("address_id")
+  // PRINCIPAL | SECONDARY
+  addressType  String?  @map("address_type") @db.VarChar(20)
+  // Días en que aplica esta dirección: "LUN,MIE,VIE" / "MAR,JUE"
+  // Null significa que aplica todos los días
+  validDays    String?  @map("valid_days") @db.VarChar(50)
+  createdAt    DateTime @default(now()) @map("created_at")
 
   person  Person  @relation(fields: [personId], references: [id])
   address Address @relation(fields: [addressId], references: [id])
@@ -154,9 +211,15 @@ model Headquarters {
   address Address @relation(fields: [addressId], references: [id])
 
   routeAssignmentHeadquarters RouteAssignmentHeadquarters[]
+  routesAsDestination         Route[]
 
   @@map("HEADQUARTERS")
 }
+
+// ─────────────────────────────────────────────
+// DOCUMENTACIÓN DE VEHÍCULOS
+// documentType: SOAT | TECHNICAL_INSPECTION | INSURANCE | PROPERTY_CARD
+// ─────────────────────────────────────────────
 
 model VehicleDocument {
   id             Int       @id @default(autoincrement())
@@ -205,25 +268,38 @@ model Vehicle {
   @@map("VEHICLE")
 }
 
-model Route {
-  id             Int      @id @default(autoincrement())
-  name           String   @db.VarChar(100)
-  startTime      DateTime @map("start_time") @db.Time(6)
-  endTime        DateTime @map("end_time") @db.Time(6)
-  status         String?  @db.VarChar(20)
-  vehiclePlate   String?  @map("vehicle_plate") @db.VarChar(20)
-  driverPersonId Int?     @map("driver_person_id")
-  createdAt      DateTime @default(now()) @map("created_at")
+// ─────────────────────────────────────────────
+// RUTAS Y PARADAS
+// Una ruta pertenece a una zona y tiene un destino (sede/colegio)
+// status: ACTIVE | INACTIVE
+// ─────────────────────────────────────────────
 
-  vehicle Vehicle? @relation(fields: [vehiclePlate], references: [plate])
-  driver  Person?  @relation(fields: [driverPersonId], references: [id])
+model Route {
+  id                Int      @id @default(autoincrement())
+  name              String   @db.VarChar(100)
+  zoneId            Int?     @map("zone_id")
+  originDescription String?  @map("origin_description") @db.VarChar(200)
+  destinationId     Int?     @map("destination_id")
+  startTime         DateTime @map("start_time") @db.Time(6)
+  endTime           DateTime @map("end_time") @db.Time(6)
+  status            String?  @db.VarChar(20)
+  vehiclePlate      String?  @map("vehicle_plate") @db.VarChar(20)
+  driverPersonId    Int?     @map("driver_person_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  zone        Zone?         @relation(fields: [zoneId], references: [id])
+  vehicle     Vehicle?      @relation(fields: [vehiclePlate], references: [plate])
+  driver      Person?       @relation(fields: [driverPersonId], references: [id])
+  destination Headquarters? @relation(fields: [destinationId], references: [id])
 
   stops            Stop[]
   routeAssignments RouteAssignment[]
   trips            Trip[]
 
+  @@index([zoneId])
   @@index([vehiclePlate])
   @@index([driverPersonId])
+  @@index([destinationId])
   @@map("ROUTE")
 }
 
@@ -284,6 +360,12 @@ model RouteAssignmentHeadquarters {
   @@map("ROUTE_ASSIGNMENT_HEADQUARTERS")
 }
 
+// ─────────────────────────────────────────────
+// VIAJES
+// Flujo de status:
+//   PENDING_CHECKLIST → ENABLED → IN_PROGRESS → COMPLETED | CANCELLED
+// ─────────────────────────────────────────────
+
 model Trip {
   id             Int       @id @default(autoincrement())
   routeId        Int       @map("route_id")
@@ -306,6 +388,21 @@ model Trip {
   @@index([vehiclePlate])
   @@index([driverPersonId])
   @@map("TRIP")
+}
+
+// ─────────────────────────────────────────────
+// CHECKLISTS
+// ChecklistTemplate: ítems predefinidos obligatorios (RF31)
+// Checklist.status: APPROVED | REJECTED | PENDING
+// ─────────────────────────────────────────────
+
+model ChecklistTemplate {
+  id       Int     @id @default(autoincrement())
+  itemName String  @map("item_name") @db.VarChar(100)
+  required Boolean @default(true)
+  status   String? @db.VarChar(20)
+
+  @@map("CHECKLIST_TEMPLATE")
 }
 
 model Checklist {
@@ -341,6 +438,11 @@ model ChecklistItem {
   @@map("CHECKLIST_ITEM")
 }
 
+// ─────────────────────────────────────────────
+// ALERTAS DE DOCUMENTACIÓN
+// alertType: EXPIRY_WARNING | EXPIRY_INFO | EXPIRED
+// ─────────────────────────────────────────────
+
 model DocumentAlert {
   id                 Int       @id @default(autoincrement())
   vehicleDocumentId  Int?      @map("vehicle_document_id")
@@ -366,6 +468,11 @@ model DocumentAlert {
   @@index([personId])
   @@map("DOCUMENT_ALERT")
 }
+
+// ─────────────────────────────────────────────
+// HISTORIAL DE ESTADOS DE VEHÍCULO
+// newStatus / previousStatus: ACTIVE | MAINTENANCE | INACTIVE
+// ─────────────────────────────────────────────
 
 model VehicleStatusHistory {
   id              Int      @id @default(autoincrement())
