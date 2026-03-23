@@ -17,6 +17,7 @@ export class StudentsService {
     const student = await this.prisma.$transaction(async (tx) => {
       const person = await tx.person.create({
         data: {
+          personType: "STUDENT",
           guardianId: dto.guardianId,
           firstName: dto.firstName,
           middleName: dto.middleName,
@@ -24,7 +25,7 @@ export class StudentsService {
           secondLastname: dto.secondLastname,
           phone: dto.phone,
           email: dto.email,
-          status: "active",
+          status: "ACTIVE",
         },
       });
 
@@ -33,7 +34,7 @@ export class StudentsService {
           documentType: dto.document.documentType,
           documentNumber: dto.document.documentNumber,
           description: dto.document.description,
-          status: "active",
+          status: "ACTIVE",
         },
       });
 
@@ -57,9 +58,7 @@ export class StudentsService {
   async findAll() {
     return this.prisma.person.findMany({
       where: {
-        guardianId: {
-          not: null,
-        },
+        personType: "STUDENT",
       },
       orderBy: { id: "desc" },
       select: this.studentSelect,
@@ -70,9 +69,7 @@ export class StudentsService {
     const student = await this.prisma.person.findFirst({
       where: {
         id,
-        guardianId: {
-          not: null,
-        },
+        personType: "STUDENT",
       },
       select: this.studentSelect,
     });
@@ -112,7 +109,7 @@ export class StudentsService {
             documentType: dto.document.documentType,
             documentNumber: dto.document.documentNumber,
             description: dto.document.description,
-            status: "active",
+            status: "ACTIVE",
           },
         });
 
@@ -143,7 +140,7 @@ export class StudentsService {
 
     const student = await this.prisma.person.update({
       where: { id },
-      data: { status: "inactive" },
+      data: { status: "INACTIVE" },
       select: this.studentSelect,
     });
 
@@ -222,7 +219,7 @@ export class StudentsService {
                 address: item.address,
                 latitude: item.latitude,
                 longitude: item.longitude,
-                status: "active",
+                status: "ACTIVE",
               },
               select: { id: true },
             })
@@ -327,9 +324,7 @@ export class StudentsService {
     const student = await this.prisma.person.findFirst({
       where: {
         id,
-        guardianId: {
-          not: null,
-        },
+        personType: "STUDENT",
       },
       select: { id: true },
     });
@@ -346,9 +341,7 @@ export class StudentsService {
     return tx.person.findFirst({
       where: {
         id,
-        guardianId: {
-          not: null,
-        },
+        personType: "STUDENT",
       },
       select: this.studentSelect,
     });

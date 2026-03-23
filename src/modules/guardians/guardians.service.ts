@@ -56,7 +56,7 @@ export class GuardiansService {
           documentType: dto.document.documentType,
           documentNumber: dto.document.documentNumber,
           description: dto.document.description,
-          status: "active",
+          status: "ACTIVE",
         },
       });
 
@@ -69,7 +69,7 @@ export class GuardiansService {
           secondLastname: dto.secondLastname,
           phone: dto.phone,
           email: dto.email,
-          status: "active",
+          status: "ACTIVE",
         },
         select: {
           id: true,
