@@ -11,6 +11,18 @@ import { CreateStudentDto, UpdateStudentDto } from "./dto/student.dto";
 export class StudentsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Delimitacion burda de Tunja para clasificar zonas por coordenadas.
+  private readonly tunjaBounds = {
+    minLat: 5.5,
+    maxLat: 5.58,
+    minLng: -73.39,
+    maxLng: -73.33,
+  };
+
+  // Referencias aproximadas compartidas por el usuario.
+  private readonly laRazaLat = 5.548;
+  private readonly bosqueRepublicaLat = 5.536;
+
   async create(dto: CreateStudentDto) {
     await this.validateCreateBusinessRules(dto);
 
@@ -181,6 +193,7 @@ export class StudentsService {
         firstName: true,
         firstLastname: true,
         email: true,
+        phone: true,
       },
     },
     personAddresses: {
@@ -193,6 +206,12 @@ export class StudentsService {
             latitude: true,
             longitude: true,
             status: true,
+            zone: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
       },
@@ -219,28 +238,7 @@ export class StudentsService {
     addresses: Array<{ address: string; latitude: number; longitude: number }>,
   ) {
     for (const item of addresses) {
-      const existingAddress = await tx.address.findFirst({
-        where: {
-          address: item.address,
-          latitude: item.latitude,
-          longitude: item.longitude,
-        },
-        select: { id: true },
-      });
-
-      const addressId = existingAddress
-        ? existingAddress.id
-        : (
-            await tx.address.create({
-              data: {
-                address: item.address,
-                latitude: item.latitude,
-                longitude: item.longitude,
-                status: "ACTIVE",
-              },
-              select: { id: true },
-            })
-          ).id;
+      const addressId = await this.getOrCreateAddressId(tx, item);
 
       await tx.personAddress.upsert({
         where: {
@@ -266,28 +264,7 @@ export class StudentsService {
     const targetAddressIds: number[] = [];
 
     for (const item of addresses) {
-      const existingAddress = await tx.address.findFirst({
-        where: {
-          address: item.address,
-          latitude: item.latitude,
-          longitude: item.longitude,
-        },
-        select: { id: true },
-      });
-
-      const addressId = existingAddress
-        ? existingAddress.id
-        : (
-            await tx.address.create({
-              data: {
-                address: item.address,
-                latitude: item.latitude,
-                longitude: item.longitude,
-                status: "ACTIVE",
-              },
-              select: { id: true },
-            })
-          ).id;
+      const addressId = await this.getOrCreateAddressId(tx, item);
 
       targetAddressIds.push(addressId);
     }
@@ -334,6 +311,119 @@ export class StudentsService {
         });
       }
     }
+  }
+
+  private async getOrCreateAddressId(
+    tx: Prisma.TransactionClient,
+    item: { address: string; latitude: number; longitude: number },
+  ) {
+    const zoneId = await this.resolveZoneId(tx, item);
+
+    const existingAddress = await tx.address.findFirst({
+      where: {
+        address: item.address,
+        latitude: item.latitude,
+        longitude: item.longitude,
+      },
+      select: { id: true, zoneId: true },
+    });
+
+    if (existingAddress) {
+      if (zoneId && existingAddress.zoneId !== zoneId) {
+        await tx.address.update({
+          where: { id: existingAddress.id },
+          data: { zoneId },
+        });
+      }
+
+      return existingAddress.id;
+    }
+
+    const createdAddress = await tx.address.create({
+      data: {
+        address: item.address,
+        latitude: item.latitude,
+        longitude: item.longitude,
+        zoneId,
+        status: "ACTIVE",
+      },
+      select: { id: true },
+    });
+
+    return createdAddress.id;
+  }
+
+  private async resolveZoneId(
+    tx: Prisma.TransactionClient,
+    item: { address: string; latitude: number; longitude: number },
+  ) {
+    const zoneKeyword =
+      this.inferZoneKeywordByCoordinates(item.latitude, item.longitude) ??
+      this.inferZoneKeyword(item.address);
+
+    if (!zoneKeyword) return null;
+
+    const zone = await tx.zone.findFirst({
+      where: {
+        OR: [
+          { name: { contains: zoneKeyword, mode: "insensitive" } },
+          { description: { contains: zoneKeyword, mode: "insensitive" } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    return zone?.id ?? null;
+  }
+
+  private inferZoneKeyword(address: string) {
+    const normalized = address.toLowerCase();
+
+    if (/(\bzona\s*norte\b|\bnorte\b)/i.test(normalized)) {
+      return "norte";
+    }
+
+    if (/(\bzona\s*centro\b|\bcentro\b)/i.test(normalized)) {
+      return "centro";
+    }
+
+    if (/(\bzona\s*sur\b|\bsur\b)/i.test(normalized)) {
+      return "sur";
+    }
+
+    return null;
+  }
+
+  private inferZoneKeywordByCoordinates(latitude: number, longitude: number) {
+    const withinTunjaRect =
+      latitude >= this.tunjaBounds.minLat &&
+      latitude <= this.tunjaBounds.maxLat &&
+      longitude >= this.tunjaBounds.minLng &&
+      longitude <= this.tunjaBounds.maxLng;
+
+    // Si cae dentro del rectangulo de ciudad, dividimos en 3 franjas horizontales.
+    if (withinTunjaRect) {
+      if (latitude >= this.laRazaLat) {
+        return "norte";
+      }
+
+      if (latitude >= this.bosqueRepublicaLat) {
+        return "centro";
+      }
+
+      return "sur";
+    }
+
+    // Fallback para puntos cercanos fuera del rectangulo.
+    if (latitude >= this.laRazaLat) {
+      return "norte";
+    }
+
+    if (latitude >= this.bosqueRepublicaLat) {
+      return "centro";
+    }
+
+    return "sur";
   }
 
   private async validateCreateBusinessRules(dto: CreateStudentDto) {
