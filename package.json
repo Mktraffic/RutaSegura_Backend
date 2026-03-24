@@ -9,7 +9,9 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main.js",
-    "test": "echo \"No tests configured yet\"",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage",
     "prisma": {
       "seed": "ts-node prisma/seed.ts"
     }
@@ -48,10 +50,13 @@
     "@nestjs/schematics": "^11.0.9",
     "@nestjs/testing": "^11.1.16",
     "@types/bcrypt": "^6.0.0",
+    "@types/jest": "^30.0.0",
     "@types/node": "^25.5.0",
     "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.18.0",
+    "jest": "^30.3.0",
     "prisma": "^7.5.0",
+    "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "tsconfig-paths": "^4.2.0",
