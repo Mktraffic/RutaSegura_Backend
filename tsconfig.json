@@ -14,7 +14,7 @@
     "skipLibCheck": true,
     "strict": true,
     "moduleResolution": "node",
-    "types": ["node"]
+    "types": ["node", "jest"]
   },
   "include": ["src", "prisma.config.ts"],
   "exclude": ["node_modules", "dist", "test", "generated"]
