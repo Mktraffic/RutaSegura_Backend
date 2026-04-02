@@ -1,14 +1,18 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseIntPipe,
+  Patch,
   Post,
   Query,
 } from "@nestjs/common";
 import { Roles } from "../../common/decorators/roles.decorator";
-import { CreateGuardianDto } from "./dto/create-guardian.dto";
+import { CreateGuardianDto, UpdateGuardianDto } from "./dto/create-guardian.dto";
 import { GuardiansService } from "./guardians.service";
 
 @Controller("guardians")
@@ -26,6 +30,16 @@ export class GuardiansController {
     };
   }
 
+  @Get(":id")
+  async findOne(@Param("id", ParseIntPipe) id: number) {
+    const guardian = await this.guardiansService.findOne(id);
+    return {
+      success: true,
+      message: "Detalle del acudiente",
+      data: guardian,
+    };
+  }
+
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateGuardianDto) {
@@ -33,6 +47,29 @@ export class GuardiansController {
     return {
       success: true,
       message: "Acudiente creado correctamente",
+      data: guardian,
+    };
+  }
+
+  @Patch(":id")
+  async update(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: UpdateGuardianDto,
+  ) {
+    const guardian = await this.guardiansService.update(id, dto);
+    return {
+      success: true,
+      message: "Acudiente actualizado correctamente",
+      data: guardian,
+    };
+  }
+
+  @Delete(":id")
+  async inactivate(@Param("id", ParseIntPipe) id: number) {
+    const guardian = await this.guardiansService.inactivate(id);
+    return {
+      success: true,
+      message: "Acudiente inactivado correctamente",
       data: guardian,
     };
   }
