@@ -1,10 +1,36 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
-import { CreateGuardianDto } from "./dto/create-guardian.dto";
+import { CreateGuardianDto, UpdateGuardianDto } from "./dto/create-guardian.dto";
 
 @Injectable()
 export class GuardiansService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private readonly guardianSelect = {
+    id: true,
+    documentId: true,
+    firstName: true,
+    middleName: true,
+    firstLastname: true,
+    secondLastname: true,
+    phone: true,
+    email: true,
+    status: true,
+    createdAt: true,
+    document: {
+      select: {
+        id: true,
+        documentType: true,
+        documentNumber: true,
+        description: true,
+        status: true,
+      },
+    },
+  } as const;
 
   async findAll(query?: string) {
     return this.prisma.guardian.findMany({
@@ -16,20 +42,94 @@ export class GuardiansService {
               { firstLastname: { contains: query, mode: "insensitive" } },
               { secondLastname: { contains: query, mode: "insensitive" } },
               { email: { contains: query, mode: "insensitive" } },
+              {
+                document: {
+                  documentNumber: { contains: query, mode: "insensitive" },
+                },
+              },
+              {
+                document: {
+                  documentType: { contains: query, mode: "insensitive" },
+                },
+              },
             ],
           }
         : undefined,
       orderBy: [{ firstName: "asc" }, { firstLastname: "asc" }],
-      select: {
-        id: true,
-        firstName: true,
-        middleName: true,
-        firstLastname: true,
-        secondLastname: true,
-        email: true,
-        phone: true,
-        status: true,
-      },
+      select: this.guardianSelect,
+    });
+  }
+
+  async findOne(id: number) {
+    const guardian = await this.prisma.guardian.findUnique({
+      where: { id },
+      select: this.guardianSelect,
+    });
+
+    if (!guardian) {
+      throw new NotFoundException({
+        success: false,
+        message: "Acudiente no encontrado",
+      });
+    }
+
+    return guardian;
+  }
+
+  async update(id: number, dto: UpdateGuardianDto) {
+    const guardian = await this.ensureGuardianExists(id);
+
+    await this.validateUpdateBusinessRules(guardian.documentId, dto);
+
+    return this.prisma.$transaction(async (tx) => {
+      if (dto.document) {
+        await tx.personDocument.update({
+          where: { id: guardian.documentId },
+          data: {
+            documentType: dto.document.documentType,
+            documentNumber: dto.document.documentNumber,
+            description: dto.document.description,
+          },
+        });
+      }
+
+      await tx.guardian.update({
+        where: { id },
+        data: {
+          firstName: dto.firstName,
+          middleName: dto.middleName,
+          firstLastname: dto.firstLastname,
+          secondLastname: dto.secondLastname,
+          phone: dto.phone,
+          email: dto.email,
+          status: dto.status,
+        },
+      });
+
+      const updated = await tx.guardian.findUnique({
+        where: { id },
+        select: this.guardianSelect,
+      });
+
+      return updated;
+    });
+  }
+
+  async inactivate(id: number) {
+    const guardian = await this.ensureGuardianExists(id);
+
+    if (guardian.status?.toUpperCase() === "INACTIVE") {
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo inactivar el acudiente",
+        errors: ["El acudiente ya se encuentra inactivo"],
+      });
+    }
+
+    return this.prisma.guardian.update({
+      where: { id },
+      data: { status: "INACTIVE" },
+      select: this.guardianSelect,
     });
   }
 
@@ -92,5 +192,66 @@ export class GuardiansService {
     });
 
     return guardian;
+  }
+
+  private async ensureGuardianExists(id: number) {
+    const guardian = await this.prisma.guardian.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        documentId: true,
+        status: true,
+      },
+    });
+
+    if (!guardian) {
+      throw new NotFoundException({
+        success: false,
+        message: "Acudiente no encontrado",
+      });
+    }
+
+    return guardian;
+  }
+
+  private async validateUpdateBusinessRules(
+    currentDocumentId: number,
+    dto: UpdateGuardianDto,
+  ) {
+    const errors: string[] = [];
+
+    if (dto.document) {
+      const hasDocumentType = !!dto.document.documentType;
+      const hasDocumentNumber = !!dto.document.documentNumber;
+
+      if (hasDocumentType !== hasDocumentNumber) {
+        errors.push(
+          "Para actualizar documento debes enviar documentType y documentNumber",
+        );
+      }
+
+      if (hasDocumentType && hasDocumentNumber) {
+        const duplicateDocument = await this.prisma.personDocument.findFirst({
+          where: {
+            documentType: dto.document.documentType,
+            documentNumber: dto.document.documentNumber,
+            id: { not: currentDocumentId },
+          },
+          select: { id: true },
+        });
+
+        if (duplicateDocument) {
+          errors.push("Ya existe un documento con ese tipo y numero");
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo actualizar el acudiente",
+        errors,
+      });
+    }
   }
 }
