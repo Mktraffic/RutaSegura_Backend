@@ -53,6 +53,7 @@ export class UsersService {
     return this.prisma.person.findMany({
       where: {
         users: { none: {} },
+        status: "ACTIVE",
         personType: { in: ["DRIVER", "COORDINATOR"] },
         ...(query
           ? {
@@ -75,6 +76,10 @@ export class UsersService {
     await this.validateCreateBusinessRules(dto);
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const role = await this.prisma.role.findUniqueOrThrow({
+      where: { id: dto.roleId },
+      select: { name: true },
+    });
 
     return this.prisma.user.create({
       data: {
@@ -82,7 +87,7 @@ export class UsersService {
         password: hashedPassword,
         personId: dto.personId,
         roleId: dto.roleId,
-        pickupEnabled: dto.pickupEnabled ?? false,
+        pickupEnabled: this.resolvePickupEnabledByRole(role.name, dto.pickupEnabled),
         status: "ACTIVE",
       },
       select: this.userSelect,
@@ -138,6 +143,15 @@ export class UsersService {
     const current = await this.ensureUserExists(id);
     await this.validateUpdateBusinessRules(id, dto);
 
+    const effectiveRoleName = dto.roleId
+      ? (
+          await this.prisma.role.findUniqueOrThrow({
+            where: { id: dto.roleId },
+            select: { name: true },
+          })
+        ).name
+      : current.role.name;
+
     const hashedPassword = dto.password
       ? await bcrypt.hash(dto.password, 10)
       : undefined;
@@ -149,16 +163,17 @@ export class UsersService {
         password: hashedPassword,
         personId: dto.personId,
         roleId: dto.roleId,
-        pickupEnabled: dto.pickupEnabled,
+        pickupEnabled: this.resolvePickupEnabledByRole(
+          effectiveRoleName,
+          dto.pickupEnabled,
+          current.pickupEnabled,
+        ),
         status: dto.status,
       },
       select: this.userSelect,
     });
 
-    if (
-      (dto.roleId || dto.personId) &&
-      current.role.name !== updated.role.name
-    ) {
+    if (dto.roleId || dto.personId) {
       await this.ensureRoleMatchesPersonType(
         updated.role.name,
         updated.person.personType,
@@ -294,6 +309,7 @@ export class UsersService {
       select: {
         id: true,
         status: true,
+        pickupEnabled: true,
         role: { select: { name: true } },
         person: { select: { personType: true } },
       },
@@ -313,6 +329,16 @@ export class UsersService {
     const role = roleName.toUpperCase();
     const type = personType.toUpperCase();
 
+    if (role === "ADMIN" && type !== "COORDINATOR") {
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo crear/actualizar el usuario",
+        errors: [
+          "La persona debe ser de tipo COORDINATOR para el rol ADMIN",
+        ],
+      });
+    }
+
     if (role === "COORDINATOR" && type !== "COORDINATOR") {
       throw new BadRequestException({
         success: false,
@@ -330,5 +356,23 @@ export class UsersService {
         errors: ["La persona debe ser de tipo DRIVER para el rol DRIVER"],
       });
     }
+  }
+
+  private resolvePickupEnabledByRole(
+    roleName: string,
+    requestedPickup?: boolean,
+    currentPickup = false,
+  ) {
+    const role = roleName.toUpperCase();
+
+    if (role !== "DRIVER") {
+      return false;
+    }
+
+    if (typeof requestedPickup === "boolean") {
+      return requestedPickup;
+    }
+
+    return currentPickup;
   }
 }
