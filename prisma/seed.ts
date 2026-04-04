@@ -13,6 +13,7 @@ async function main() {
   // ─────────────────────────────────────────────
   const roleCoordinator = await prisma.role.create({ data: { name: 'COORDINATOR' } });
   const roleDriver      = await prisma.role.create({ data: { name: 'DRIVER' } });
+  const roleAdmin       = await prisma.role.create({ data: { name: 'ADMIN' } });
 
   // ─────────────────────────────────────────────
   // 2. ZONAS
@@ -129,6 +130,22 @@ async function main() {
     data: { documentNumber: '1020304050', documentType: 'CEDULA',
       description: 'Cédula coordinadora', issueDate: new Date('2008-03-10'), status: 'ACTIVE' },
   });
+  const adminCedula = await prisma.personDocument.create({
+    data: { documentNumber: '1010101010', documentType: 'CEDULA',
+      description: 'Cédula administrador', issueDate: new Date('2009-01-15'), status: 'ACTIVE' },
+  });
+  const freeDriverCedula = await prisma.personDocument.create({
+    data: { documentNumber: '3030303030', documentType: 'CEDULA',
+      description: 'Cédula conductor disponible', issueDate: new Date('2012-04-10'), status: 'ACTIVE' },
+  });
+  const freeCoordinatorCedula = await prisma.personDocument.create({
+    data: { documentNumber: '4040404040', documentType: 'CEDULA',
+      description: 'Cédula coordinadora disponible', issueDate: new Date('2011-06-22'), status: 'ACTIVE' },
+  });
+  const freeAdminCandidateCedula = await prisma.personDocument.create({
+    data: { documentNumber: '5050505050', documentType: 'CEDULA',
+      description: 'Cédula candidata administradora', issueDate: new Date('2013-02-18'), status: 'ACTIVE' },
+  });
   const student1Doc = await prisma.personDocument.create({
     data: { documentNumber: 'TI-1234567890', documentType: 'TARJETA_IDENTIDAD',
       description: 'Tarjeta identidad menor', status: 'ACTIVE' },
@@ -187,6 +204,26 @@ async function main() {
       firstLastname: 'Jiménez', secondLastname: 'Pérez',
       phone: '3153334444', email: 'laura.jimenez@rutasegura.com', status: 'ACTIVE' },
   });
+  const adminPerson = await prisma.person.create({
+    data: { personType: 'COORDINATOR', firstName: 'Samuel',
+      firstLastname: 'Rojas', secondLastname: 'Díaz',
+      phone: '3185556677', email: 'admin@rutasegura.com', status: 'ACTIVE' },
+  });
+  const freeDriverPerson = await prisma.person.create({
+    data: { personType: 'DRIVER', firstName: 'Camilo',
+      firstLastname: 'Suárez', secondLastname: 'Ortiz',
+      phone: '3174442211', email: 'camilo.suarez@rutasegura.com', status: 'ACTIVE' },
+  });
+  const freeCoordinatorPerson = await prisma.person.create({
+    data: { personType: 'COORDINATOR', firstName: 'Daniela',
+      firstLastname: 'Morales', secondLastname: 'Ruiz',
+      phone: '3163337788', email: 'daniela.morales@rutasegura.com', status: 'ACTIVE' },
+  });
+  const freeAdminCandidatePerson = await prisma.person.create({
+    data: { personType: 'COORDINATOR', firstName: 'Gabriel',
+      firstLastname: 'Vega', secondLastname: 'Pardo',
+      phone: '3197776655', email: 'gabriel.vega@rutasegura.com', status: 'ACTIVE' },
+  });
 
   // Estudiantes zona norte
   const student1 = await prisma.person.create({
@@ -213,6 +250,10 @@ async function main() {
       { personId: driverPerson.id,      personDocumentId: driverCedula.id,      documentRole: 'CEDULA'            },
       { personId: driverPerson.id,      personDocumentId: driverLicense.id,     documentRole: 'LICENCIA'          },
       { personId: coordinatorPerson.id, personDocumentId: coordinatorCedula.id, documentRole: 'CEDULA'            },
+      { personId: adminPerson.id,       personDocumentId: adminCedula.id,       documentRole: 'CEDULA'            },
+      { personId: freeDriverPerson.id,  personDocumentId: freeDriverCedula.id,  documentRole: 'CEDULA'            },
+      { personId: freeCoordinatorPerson.id, personDocumentId: freeCoordinatorCedula.id, documentRole: 'CEDULA'     },
+      { personId: freeAdminCandidatePerson.id, personDocumentId: freeAdminCandidateCedula.id, documentRole: 'CEDULA' },
       { personId: student1.id,          personDocumentId: student1Doc.id,       documentRole: 'TARJETA_IDENTIDAD' },
       { personId: student2.id,          personDocumentId: student2Doc.id,       documentRole: 'TARJETA_IDENTIDAD' },
       { personId: student3.id,          personDocumentId: student3Doc.id,       documentRole: 'TARJETA_IDENTIDAD' },
@@ -227,6 +268,11 @@ async function main() {
   const coordinatorUser = await prisma.user.create({
     data: { email: 'coordinador@rutasegura.com', password: hashedPassword,
       personId: coordinatorPerson.id, roleId: roleCoordinator.id,
+      status: 'ACTIVE', pickupEnabled: false },
+  });
+  const adminUser = await prisma.user.create({
+    data: { email: 'admin@rutasegura.com', password: hashedPassword,
+      personId: adminPerson.id, roleId: roleAdmin.id,
       status: 'ACTIVE', pickupEnabled: false },
   });
   const driverUser = await prisma.user.create({
@@ -496,6 +542,7 @@ async function main() {
   });
 
   console.log('✅ Seed completado');
+  console.log('   Admin:        admin@rutasegura.com       / password123');
   console.log('   Coordinadora: coordinador@rutasegura.com / password123');
   console.log('   Conductor:    conductor@rutasegura.com   / password123');
 }

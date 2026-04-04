@@ -6,10 +6,17 @@ import { RolesGuard } from "./common/guards/roles.guard";
 import { AuthModule } from "./modules/auth/auth.module";
 import { GuardiansModule } from "./modules/guardians/guardians.module";
 import { StudentsModule } from "./modules/students/students.module";
+import { UsersModule } from "./modules/users/users.module";
 import { PrismaModule } from "./prisma/prisma.module";
 
 @Module({
-  imports: [PrismaModule, AuthModule, GuardiansModule, StudentsModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    GuardiansModule,
+    StudentsModule,
+    UsersModule,
+  ],
   controllers: [AppController],
   providers: [
     {
