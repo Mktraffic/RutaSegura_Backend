@@ -12,6 +12,22 @@ import { CreateUserDto, UpdateUserDto } from "./dto/user.dto";
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private readonly roleSelect = {
+    id: true,
+    name: true,
+  } satisfies Prisma.RoleSelect;
+
+  private readonly personSelect = {
+    id: true,
+    personType: true,
+    firstName: true,
+    middleName: true,
+    firstLastname: true,
+    secondLastname: true,
+    email: true,
+    status: true,
+  } satisfies Prisma.PersonSelect;
+
   private readonly userSelect = {
     id: true,
     email: true,
@@ -19,24 +35,41 @@ export class UsersService {
     pickupEnabled: true,
     createdAt: true,
     role: {
-      select: {
-        id: true,
-        name: true,
-      },
+      select: this.roleSelect,
     },
     person: {
-      select: {
-        id: true,
-        personType: true,
-        firstName: true,
-        middleName: true,
-        firstLastname: true,
-        secondLastname: true,
-        email: true,
-        status: true,
-      },
+      select: this.personSelect,
     },
   } satisfies Prisma.UserSelect;
+
+  async findRoles() {
+    return this.prisma.role.findMany({
+      orderBy: { name: "asc" },
+      select: this.roleSelect,
+    });
+  }
+
+  async findAvailablePersons(query?: string) {
+    return this.prisma.person.findMany({
+      where: {
+        users: { none: {} },
+        personType: { in: ["DRIVER", "COORDINATOR"] },
+        ...(query
+          ? {
+              OR: [
+                { firstName: { contains: query, mode: "insensitive" } },
+                { middleName: { contains: query, mode: "insensitive" } },
+                { firstLastname: { contains: query, mode: "insensitive" } },
+                { secondLastname: { contains: query, mode: "insensitive" } },
+                { email: { contains: query, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ firstName: "asc" }, { firstLastname: "asc" }],
+      select: this.personSelect,
+    });
+  }
 
   async create(dto: CreateUserDto) {
     await this.validateCreateBusinessRules(dto);

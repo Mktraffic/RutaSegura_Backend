@@ -16,7 +16,7 @@ import { CreateUserDto, UpdateUserDto } from "./dto/user.dto";
 import { UsersService } from "./users.service";
 
 @Controller("users")
-@Roles("admin", "coordinator", "coordinador")
+@Roles("admin")
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
@@ -38,6 +38,28 @@ export class UsersController {
       success: true,
       message: "Listado de usuarios",
       data: users,
+    };
+  }
+
+  @Get("catalog/roles")
+  async findRoles() {
+    const roles = await this.usersService.findRoles();
+    return {
+      success: true,
+      message: "Listado de roles",
+      data: roles,
+    };
+  }
+
+  @Get("catalog/persons")
+  async findAvailablePersons(@Query("q") query?: string) {
+    const persons = await this.usersService.findAvailablePersons(
+      query?.trim() || undefined,
+    );
+    return {
+      success: true,
+      message: "Listado de personas disponibles",
+      data: persons,
     };
   }
 
