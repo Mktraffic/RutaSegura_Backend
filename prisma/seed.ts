@@ -162,31 +162,31 @@ async function main() {
       description: 'Cédula coordinadora', issueDate: new Date('2008-03-10'), status: 'ACTIVE' },
   });
   const adminCedula = await prisma.personDocument.create({
-    data: { documentNumber: '1010101010', documentType: 'CEDULA',
+    data: { documentNumber: '1010101010', documentTypeId: cedulaTypeId,
       description: 'Cédula administrador', issueDate: new Date('2009-01-15'), status: 'ACTIVE' },
   });
   const freeDriverCedula = await prisma.personDocument.create({
-    data: { documentNumber: '3030303030', documentType: 'CEDULA',
+    data: { documentNumber: '3030303030', documentTypeId: cedulaTypeId,
       description: 'Cédula conductor disponible', issueDate: new Date('2012-04-10'), status: 'ACTIVE' },
   });
   const freeCoordinatorCedula = await prisma.personDocument.create({
-    data: { documentNumber: '4040404040', documentType: 'CEDULA',
+    data: { documentNumber: '4040404040', documentTypeId: cedulaTypeId,
       description: 'Cédula coordinadora disponible', issueDate: new Date('2011-06-22'), status: 'ACTIVE' },
   });
   const freeAdminCandidateCedula = await prisma.personDocument.create({
-    data: { documentNumber: '5050505050', documentType: 'CEDULA',
+    data: { documentNumber: '5050505050', documentTypeId: cedulaTypeId,
       description: 'Cédula candidata administradora', issueDate: new Date('2013-02-18'), status: 'ACTIVE' },
   });
   const student1Doc = await prisma.personDocument.create({
-    data: { documentNumber: 'TI-1234567890', documentTypeId: tarjetaTypeId,
+    data: { documentNumber: '1234567890', documentTypeId: tarjetaTypeId,
       description: 'Tarjeta identidad menor', status: 'ACTIVE' },
   });
   const student2Doc = await prisma.personDocument.create({
-    data: { documentNumber: 'TI-0987654321', documentTypeId: tarjetaTypeId,
+    data: { documentNumber: '0987654321', documentTypeId: tarjetaTypeId,
       description: 'Tarjeta identidad menor', status: 'ACTIVE' },
   });
   const student3Doc = await prisma.personDocument.create({
-    data: { documentNumber: 'TI-1122334455', documentTypeId: tarjetaTypeId,
+    data: { documentNumber: '1122334455', documentTypeId: tarjetaTypeId,
       description: 'Tarjeta identidad menor', status: 'ACTIVE' },
   });
   const guardian1Doc = await prisma.personDocument.create({
