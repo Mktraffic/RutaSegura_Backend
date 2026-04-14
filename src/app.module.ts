@@ -4,6 +4,7 @@ import { AppController } from "./app.controller";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 import { RolesGuard } from "./common/guards/roles.guard";
 import { AuthModule } from "./modules/auth/auth.module";
+import { DriversModule } from "./modules/drivers/drivers.module";
 import { GuardiansModule } from "./modules/guardians/guardians.module";
 import { StudentsModule } from "./modules/students/students.module";
 import { UsersModule } from "./modules/users/users.module";
@@ -13,6 +14,7 @@ import { PrismaModule } from "./prisma/prisma.module";
   imports: [
     PrismaModule,
     AuthModule,
+    DriversModule,
     GuardiansModule,
     StudentsModule,
     UsersModule,
