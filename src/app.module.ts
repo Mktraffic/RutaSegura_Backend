@@ -8,6 +8,7 @@ import { DriversModule } from "./modules/drivers/drivers.module";
 import { GuardiansModule } from "./modules/guardians/guardians.module";
 import { StudentsModule } from "./modules/students/students.module";
 import { UsersModule } from "./modules/users/users.module";
+import { VehiclesModule } from "./modules/vehicles/vehicles.module";
 import { PrismaModule } from "./prisma/prisma.module";
 
 @Module({
@@ -18,6 +19,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     GuardiansModule,
     StudentsModule,
     UsersModule,
+    VehiclesModule,
   ],
   controllers: [AppController],
   providers: [
