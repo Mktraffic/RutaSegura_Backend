@@ -26,6 +26,10 @@ export class StudentsService {
   async create(dto: CreateStudentDto) {
     await this.validateCreateBusinessRules(dto);
 
+    const documentTypeId = await this.resolveDocumentTypeId(
+      dto.document.documentType,
+    );
+
     const student = await this.prisma.$transaction(async (tx) => {
       const person = await tx.person.create({
         data: {
@@ -43,7 +47,7 @@ export class StudentsService {
 
       const document = await tx.personDocument.create({
         data: {
-          documentType: dto.document.documentType,
+          documentTypeId,
           documentNumber: dto.document.documentNumber,
           description: dto.document.description,
           status: "ACTIVE",
@@ -116,6 +120,10 @@ export class StudentsService {
       });
 
       if (dto.document) {
+        const documentTypeId = await this.resolveDocumentTypeId(
+          dto.document.documentType,
+        );
+
         const existingLink = await tx.personDocumentLink.findFirst({
           where: { personId: id },
           orderBy: { id: "asc" },
@@ -126,7 +134,7 @@ export class StudentsService {
           await tx.personDocument.update({
             where: { id: existingLink.personDocumentId },
             data: {
-              documentType: dto.document.documentType,
+              documentTypeId,
               documentNumber: dto.document.documentNumber,
               description: dto.document.description,
               status: "ACTIVE",
@@ -135,7 +143,7 @@ export class StudentsService {
         } else {
           const document = await tx.personDocument.create({
             data: {
-              documentType: dto.document.documentType,
+              documentTypeId,
               documentNumber: dto.document.documentNumber,
               description: dto.document.description,
               status: "ACTIVE",
@@ -223,7 +231,12 @@ export class StudentsService {
         personDocument: {
           select: {
             id: true,
-            documentType: true,
+            documentType: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
             documentNumber: true,
             status: true,
           },
@@ -451,7 +464,12 @@ export class StudentsService {
 
     const duplicateDoc = await this.prisma.personDocument.findFirst({
       where: {
-        documentType: dto.document.documentType,
+        documentType: {
+          name: {
+            equals: dto.document.documentType,
+            mode: "insensitive",
+          },
+        },
         documentNumber: dto.document.documentNumber,
       },
       select: { id: true },
@@ -496,7 +514,12 @@ export class StudentsService {
     if (dto.document) {
       const duplicateDoc = await this.prisma.personDocument.findFirst({
         where: {
-          documentType: dto.document.documentType,
+          documentType: {
+            name: {
+              equals: dto.document.documentType,
+              mode: "insensitive",
+            },
+          },
           documentNumber: dto.document.documentNumber,
           personDocumentLinks: {
             none: { personId: studentId },
@@ -543,5 +566,49 @@ export class StudentsService {
       },
       select: this.studentSelect,
     });
+  }
+
+  private async resolveDocumentTypeId(documentTypeName: string) {
+    const normalizedInput = documentTypeName.trim().toUpperCase();
+    const aliasToCatalog: Record<string, string> = {
+      CC: "Cedula de ciudadania",
+      CEDULA: "Cedula de ciudadania",
+      CEDULA_DE_CIUDADANIA: "Cedula de ciudadania",
+      "CEDULA DE CIUDADANIA": "Cedula de ciudadania",
+      TI: "Tarjeta de identidad",
+      TARJETA_IDENTIDAD: "Tarjeta de identidad",
+      "TARJETA DE IDENTIDAD": "Tarjeta de identidad",
+      LICENCIA: "Licencia de conduccion",
+      LICENCIA_CONDUCCION: "Licencia de conduccion",
+      "LICENCIA DE CONDUCCION": "Licencia de conduccion",
+      CE: "Cedula de extranjeria",
+      CEDULA_EXTRANJERIA: "Cedula de extranjeria",
+      "CEDULA DE EXTRANJERIA": "Cedula de extranjeria",
+      PASAPORTE: "Pasaporte",
+    };
+
+    const targetName = aliasToCatalog[normalizedInput] ?? documentTypeName.trim();
+
+    const documentType = await this.prisma.documentType.findFirst({
+      where: {
+        name: {
+          equals: targetName,
+          mode: "insensitive",
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!documentType) {
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo registrar/actualizar el estudiante",
+        errors: [
+          `El tipo de documento '${documentTypeName}' no existe en el catalogo DOCUMENT_TYPE`,
+        ],
+      });
+    }
+
+    return documentType.id;
   }
 }

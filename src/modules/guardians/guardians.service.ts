@@ -24,7 +24,12 @@ export class GuardiansService {
     document: {
       select: {
         id: true,
-        documentType: true,
+        documentType: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         documentNumber: true,
         description: true,
         status: true,
@@ -49,7 +54,9 @@ export class GuardiansService {
               },
               {
                 document: {
-                  documentType: { contains: query, mode: "insensitive" },
+                  documentType: {
+                    name: { contains: query, mode: "insensitive" },
+                  },
                 },
               },
             ],
@@ -83,10 +90,14 @@ export class GuardiansService {
 
     return this.prisma.$transaction(async (tx) => {
       if (dto.document) {
+        const documentTypeId = dto.document.documentType
+          ? await this.resolveDocumentTypeId(dto.document.documentType)
+          : undefined;
+
         await tx.personDocument.update({
           where: { id: guardian.documentId },
           data: {
-            documentType: dto.document.documentType,
+            documentTypeId,
             documentNumber: dto.document.documentNumber,
             description: dto.document.description,
           },
@@ -134,9 +145,13 @@ export class GuardiansService {
   }
 
   async create(dto: CreateGuardianDto) {
+    const documentTypeId = await this.resolveDocumentTypeId(
+      dto.document.documentType,
+    );
+
     const existingDocument = await this.prisma.personDocument.findFirst({
       where: {
-        documentType: dto.document.documentType,
+        documentTypeId,
         documentNumber: dto.document.documentNumber,
       },
       select: { id: true },
@@ -153,7 +168,7 @@ export class GuardiansService {
     const guardian = await this.prisma.$transaction(async (tx) => {
       const document = await tx.personDocument.create({
         data: {
-          documentType: dto.document.documentType,
+          documentTypeId,
           documentNumber: dto.document.documentNumber,
           description: dto.document.description,
           status: "ACTIVE",
@@ -183,7 +198,12 @@ export class GuardiansService {
           document: {
             select: {
               id: true,
-              documentType: true,
+              documentType: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
               documentNumber: true,
             },
           },
@@ -231,9 +251,13 @@ export class GuardiansService {
       }
 
       if (hasDocumentType && hasDocumentNumber) {
+        const documentTypeId = await this.resolveDocumentTypeId(
+          dto.document.documentType!,
+        );
+
         const duplicateDocument = await this.prisma.personDocument.findFirst({
           where: {
-            documentType: dto.document.documentType,
+            documentTypeId,
             documentNumber: dto.document.documentNumber,
             id: { not: currentDocumentId },
           },
@@ -253,5 +277,49 @@ export class GuardiansService {
         errors,
       });
     }
+  }
+
+  private async resolveDocumentTypeId(documentTypeName: string) {
+    const normalizedInput = documentTypeName.trim().toUpperCase();
+    const aliasToCatalog: Record<string, string> = {
+      CC: "Cedula de ciudadania",
+      CEDULA: "Cedula de ciudadania",
+      CEDULA_DE_CIUDADANIA: "Cedula de ciudadania",
+      "CEDULA DE CIUDADANIA": "Cedula de ciudadania",
+      TI: "Tarjeta de identidad",
+      TARJETA_IDENTIDAD: "Tarjeta de identidad",
+      "TARJETA DE IDENTIDAD": "Tarjeta de identidad",
+      LICENCIA: "Licencia de conduccion",
+      LICENCIA_CONDUCCION: "Licencia de conduccion",
+      "LICENCIA DE CONDUCCION": "Licencia de conduccion",
+      CE: "Cedula de extranjeria",
+      CEDULA_EXTRANJERIA: "Cedula de extranjeria",
+      "CEDULA DE EXTRANJERIA": "Cedula de extranjeria",
+      PASAPORTE: "Pasaporte",
+    };
+
+    const targetName = aliasToCatalog[normalizedInput] ?? documentTypeName.trim();
+
+    const documentType = await this.prisma.documentType.findFirst({
+      where: {
+        name: {
+          equals: targetName,
+          mode: "insensitive",
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!documentType) {
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo procesar el documento",
+        errors: [
+          `El tipo de documento '${documentTypeName}' no existe en el catalogo DOCUMENT_TYPE`,
+        ],
+      });
+    }
+
+    return documentType.id;
   }
 }

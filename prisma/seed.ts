@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
@@ -7,6 +8,36 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log('Seeding database...');
+
+  const personDocumentTypes = [
+    'Licencia de conduccion',
+    'Tarjeta de identidad',
+    'Cedula de ciudadania',
+    'Pasaporte',
+    'Cedula de extranjeria',
+  ];
+
+  await prisma.documentType.createMany({
+    data: personDocumentTypes.map((name) => ({ name })),
+    skipDuplicates: true,
+  });
+
+  const documentTypeCatalog = await prisma.documentType.findMany({
+    where: { name: { in: personDocumentTypes } },
+    select: { id: true, name: true },
+  });
+
+  const documentTypeIdByName = new Map(
+    documentTypeCatalog.map((item) => [item.name, item.id]),
+  );
+
+  const cedulaTypeId = documentTypeIdByName.get('Cedula de ciudadania');
+  const licenciaTypeId = documentTypeIdByName.get('Licencia de conduccion');
+  const tarjetaTypeId = documentTypeIdByName.get('Tarjeta de identidad');
+
+  if (!cedulaTypeId || !licenciaTypeId || !tarjetaTypeId) {
+    throw new Error('No se pudo cargar el catalogo base de tipos de documento');
+  }
 
   // ─────────────────────────────────────────────
   // 1. ROLES
@@ -117,57 +148,57 @@ async function main() {
   // 6. PERSON DOCUMENTS
   // ─────────────────────────────────────────────
   const driverCedula = await prisma.personDocument.create({
-    data: { documentNumber: '1098765432', documentType: 'CEDULA',
+    data: { documentNumber: '1098765432', documentTypeId: cedulaTypeId,
       description: 'Cédula conductor', issueDate: new Date('2010-05-15'), status: 'ACTIVE' },
   });
   const driverLicense = await prisma.personDocument.create({
-    data: { documentNumber: 'LIC-C2-00123', documentType: 'LICENCIA_CONDUCCION',
+    data: { documentNumber: 'LIC-C2-00123', documentTypeId: licenciaTypeId,
       description: 'Licencia categoría C2', issueDate: new Date('2018-08-01'),
       expiryDate: new Date('2028-08-01'),
       fileUrl: 'https://storage.rutasegura.com/docs/licencia_00123.pdf', status: 'ACTIVE' },
   });
   const coordinatorCedula = await prisma.personDocument.create({
-    data: { documentNumber: '1020304050', documentType: 'CEDULA',
+    data: { documentNumber: '1020304050', documentTypeId: cedulaTypeId,
       description: 'Cédula coordinadora', issueDate: new Date('2008-03-10'), status: 'ACTIVE' },
   });
   const adminCedula = await prisma.personDocument.create({
-    data: { documentNumber: '1010101010', documentType: 'CEDULA',
+    data: { documentNumber: '1010101010', documentTypeId: cedulaTypeId,
       description: 'Cédula administrador', issueDate: new Date('2009-01-15'), status: 'ACTIVE' },
   });
   const freeDriverCedula = await prisma.personDocument.create({
-    data: { documentNumber: '3030303030', documentType: 'CEDULA',
+    data: { documentNumber: '3030303030', documentTypeId: cedulaTypeId,
       description: 'Cédula conductor disponible', issueDate: new Date('2012-04-10'), status: 'ACTIVE' },
   });
   const freeCoordinatorCedula = await prisma.personDocument.create({
-    data: { documentNumber: '4040404040', documentType: 'CEDULA',
+    data: { documentNumber: '4040404040', documentTypeId: cedulaTypeId,
       description: 'Cédula coordinadora disponible', issueDate: new Date('2011-06-22'), status: 'ACTIVE' },
   });
   const freeAdminCandidateCedula = await prisma.personDocument.create({
-    data: { documentNumber: '5050505050', documentType: 'CEDULA',
+    data: { documentNumber: '5050505050', documentTypeId: cedulaTypeId,
       description: 'Cédula candidata administradora', issueDate: new Date('2013-02-18'), status: 'ACTIVE' },
   });
   const student1Doc = await prisma.personDocument.create({
-    data: { documentNumber: 'TI-1234567890', documentType: 'TARJETA_IDENTIDAD',
+    data: { documentNumber: '1234567890', documentTypeId: tarjetaTypeId,
       description: 'Tarjeta identidad menor', status: 'ACTIVE' },
   });
   const student2Doc = await prisma.personDocument.create({
-    data: { documentNumber: 'TI-0987654321', documentType: 'TARJETA_IDENTIDAD',
+    data: { documentNumber: '0987654321', documentTypeId: tarjetaTypeId,
       description: 'Tarjeta identidad menor', status: 'ACTIVE' },
   });
   const student3Doc = await prisma.personDocument.create({
-    data: { documentNumber: 'TI-1122334455', documentType: 'TARJETA_IDENTIDAD',
+    data: { documentNumber: '1122334455', documentTypeId: tarjetaTypeId,
       description: 'Tarjeta identidad menor', status: 'ACTIVE' },
   });
   const guardian1Doc = await prisma.personDocument.create({
-    data: { documentNumber: '5544332211', documentType: 'CEDULA',
+    data: { documentNumber: '5544332211', documentTypeId: cedulaTypeId,
       description: 'Cédula acudiente 1', status: 'ACTIVE' },
   });
   const guardian2Doc = await prisma.personDocument.create({
-    data: { documentNumber: '6677889900', documentType: 'CEDULA',
+    data: { documentNumber: '6677889900', documentTypeId: cedulaTypeId,
       description: 'Cédula acudiente 2', status: 'ACTIVE' },
   });
   const guardian3Doc = await prisma.personDocument.create({
-    data: { documentNumber: '7788990011', documentType: 'CEDULA',
+    data: { documentNumber: '7788990011', documentTypeId: cedulaTypeId,
       description: 'Cédula acudiente 3', status: 'ACTIVE' },
   });
 
@@ -548,5 +579,8 @@ async function main() {
 }
 
 main()
-  .catch(() => process.exit(1))
+  .catch((error) => {
+    console.error('Seed failed:', error);
+    process.exit(1);
+  })
   .finally(() => prisma.$disconnect());
