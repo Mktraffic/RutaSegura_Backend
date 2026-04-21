@@ -629,9 +629,10 @@ export class DocumentManagementService {
     documentNumber: string,
     excludeId?: number,
   ) {
+    void documentTypeId;
+
     const duplicate = await this.prisma.personDocument.findFirst({
       where: {
-        documentTypeId,
         documentNumber,
         ...(excludeId ? { id: { not: excludeId } } : {}),
       },
@@ -641,7 +642,7 @@ export class DocumentManagementService {
       throw new BadRequestException({
         success: false,
         message: "No pudimos guardar el documento de la persona",
-        errors: ["Ya existe un documento de persona con ese tipo y numero"],
+        errors: ["Ya existe una persona con ese numero de documento"],
       });
     }
   }

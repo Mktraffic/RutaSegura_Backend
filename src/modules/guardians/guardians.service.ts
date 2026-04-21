@@ -86,7 +86,7 @@ export class GuardiansService {
   async update(id: number, dto: UpdateGuardianDto) {
     const guardian = await this.ensureGuardianExists(id);
 
-    await this.validateUpdateBusinessRules(guardian.documentId, dto);
+    await this.validateUpdateBusinessRules(dto);
 
     return this.prisma.$transaction(async (tx) => {
       if (dto.document) {
@@ -98,7 +98,6 @@ export class GuardiansService {
           where: { id: guardian.documentId },
           data: {
             documentTypeId,
-            documentNumber: dto.document.documentNumber,
             description: dto.document.description,
           },
         });
@@ -151,7 +150,6 @@ export class GuardiansService {
 
     const existingDocument = await this.prisma.personDocument.findFirst({
       where: {
-        documentTypeId,
         documentNumber: dto.document.documentNumber,
       },
       select: { id: true },
@@ -161,7 +159,7 @@ export class GuardiansService {
       throw new BadRequestException({
         success: false,
         message: "No se pudo crear el acudiente",
-        errors: ["Ya existe un documento con ese tipo y numero"],
+        errors: ["Ya existe una persona con ese numero de documento"],
       });
     }
 
@@ -234,39 +232,21 @@ export class GuardiansService {
     return guardian;
   }
 
-  private async validateUpdateBusinessRules(
-    currentDocumentId: number,
-    dto: UpdateGuardianDto,
-  ) {
+  private async validateUpdateBusinessRules(dto: UpdateGuardianDto) {
     const errors: string[] = [];
 
     if (dto.document) {
       const hasDocumentType = !!dto.document.documentType;
       const hasDocumentNumber = !!dto.document.documentNumber;
 
-      if (hasDocumentType !== hasDocumentNumber) {
+      if (hasDocumentNumber) {
         errors.push(
-          "Para actualizar documento debes enviar documentType y documentNumber",
+          "No puedes modificar el numero de documento desde la edicion de acudiente",
         );
       }
 
-      if (hasDocumentType && hasDocumentNumber) {
-        const documentTypeId = await this.resolveDocumentTypeId(
-          dto.document.documentType!,
-        );
-
-        const duplicateDocument = await this.prisma.personDocument.findFirst({
-          where: {
-            documentTypeId,
-            documentNumber: dto.document.documentNumber,
-            id: { not: currentDocumentId },
-          },
-          select: { id: true },
-        });
-
-        if (duplicateDocument) {
-          errors.push("Ya existe un documento con ese tipo y numero");
-        }
+      if (hasDocumentType) {
+        await this.resolveDocumentTypeId(dto.document.documentType!);
       }
     }
 
