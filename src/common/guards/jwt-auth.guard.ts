@@ -27,7 +27,7 @@ export class JwtAuthGuard extends AuthGuard("jwt") {
 
   handleRequest<TUser = unknown>(err: unknown, user: TUser) {
     if (err || !user) {
-      throw (err as Error) ?? new UnauthorizedException("Invalid access token");
+      throw (err as Error) ?? new UnauthorizedException("Tu sesion no es valida o ya vencio");
     }
 
     return user;

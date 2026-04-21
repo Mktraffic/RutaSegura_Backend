@@ -51,9 +51,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       return {
         success: false,
         statusCode: HttpStatus.BAD_REQUEST,
-        message: "No se pudo procesar la solicitud por datos invalidos",
+        message: "Revisa la informacion ingresada",
         errors: [
-          "Verifique tipos de datos, campos obligatorios y formato de fechas",
+          "Hay datos incompletos o con formato no valido",
         ],
         timestamp: new Date().toISOString(),
         path,
@@ -63,7 +63,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     return {
       success: false,
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-      message: "Ocurrio un error interno del servidor",
+      message: "Tuvimos un problema interno. Intenta nuevamente en unos minutos",
       timestamp: new Date().toISOString(),
       path,
     };
@@ -85,13 +85,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     if (Array.isArray(body.message)) {
       return {
-        message: "No se pudo procesar la solicitud",
+        message: "Revisa la informacion ingresada",
         errors: body.message,
       };
     }
 
     return {
-      message: body.message || body.error || "No se pudo procesar la solicitud",
+      message: body.message || body.error || "No pudimos completar esta accion",
       ...(body.errors?.length ? { errors: body.errors } : {}),
     };
   }
@@ -106,11 +106,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       return {
         success: false,
         statusCode: HttpStatus.CONFLICT,
-        message: "No se pudo procesar la solicitud por datos duplicados",
+        message: "No pudimos guardar la informacion",
         errors: [
           target
-            ? `Ya existe un registro con el valor de: ${target}`
-            : "Ya existe un registro con los mismos datos unicos",
+            ? `Ya existe un registro con ese ${target}`
+            : "Ya existe un registro con esos mismos datos",
         ],
         timestamp: new Date().toISOString(),
         path,
@@ -121,11 +121,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       return {
         success: false,
         statusCode: HttpStatus.BAD_REQUEST,
-        message: "No se pudo procesar la solicitud por una referencia invalida",
+        message: "No pudimos completar esta accion",
         errors: [
           target
             ? `El valor de ${target} no existe o no es valido`
-            : "Uno de los identificadores relacionados no existe",
+            : "Uno de los datos relacionados no existe",
         ],
         timestamp: new Date().toISOString(),
         path,
@@ -136,7 +136,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       return {
         success: false,
         statusCode: HttpStatus.NOT_FOUND,
-        message: "No se encontro el registro solicitado",
+        message: "No encontramos la informacion que buscas",
         timestamp: new Date().toISOString(),
         path,
       };
@@ -146,11 +146,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       return {
         success: false,
         statusCode: HttpStatus.BAD_REQUEST,
-        message: "No se pudo procesar la solicitud por longitud invalida de datos",
+        message: "No pudimos guardar la informacion",
         errors: [
           target
-            ? `El valor para ${target} excede la longitud permitida`
-            : "Uno de los campos excede la longitud permitida",
+            ? `El valor para ${target} es demasiado largo`
+            : "Uno de los campos tiene mas caracteres de los permitidos",
         ],
         timestamp: new Date().toISOString(),
         path,
@@ -160,8 +160,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     return {
       success: false,
       statusCode: HttpStatus.BAD_REQUEST,
-      message: "No se pudo procesar la solicitud",
-      errors: [error.message],
+      message: "No pudimos completar esta accion",
+      errors: ["Verifica los datos e intenta nuevamente"],
       timestamp: new Date().toISOString(),
       path,
     };

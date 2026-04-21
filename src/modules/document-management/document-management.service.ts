@@ -614,9 +614,9 @@ export class DocumentManagementService {
     if (!documentType) {
       throw new BadRequestException({
         success: false,
-        message: "No se pudo procesar el documento",
+        message: "No pudimos guardar el documento",
         errors: [
-          `El tipo de documento '${documentTypeName}' no existe en el catalogo DOCUMENT_TYPE`,
+          `El tipo de documento '${documentTypeName}' no existe`,
         ],
       });
     }
@@ -640,7 +640,7 @@ export class DocumentManagementService {
     if (duplicate) {
       throw new BadRequestException({
         success: false,
-        message: "No se pudo procesar el documento de persona",
+        message: "No pudimos guardar el documento de la persona",
         errors: ["Ya existe un documento de persona con ese tipo y numero"],
       });
     }
@@ -662,7 +662,7 @@ export class DocumentManagementService {
     if (duplicate) {
       throw new BadRequestException({
         success: false,
-        message: "No se pudo procesar el documento de vehiculo",
+        message: "No pudimos guardar el documento del vehiculo",
         errors: ["Ya existe un documento vehicular con ese tipo y numero"],
       });
     }

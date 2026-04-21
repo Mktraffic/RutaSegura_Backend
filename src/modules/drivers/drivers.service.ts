@@ -396,9 +396,9 @@ export class DriversService {
     if (!documentType) {
       throw new BadRequestException({
         success: false,
-        message: "No se pudo procesar el documento",
+        message: "No pudimos guardar el documento",
         errors: [
-          `El tipo de documento '${documentTypeName}' no existe en el catalogo DOCUMENT_TYPE`,
+          `El tipo de documento '${documentTypeName}' no existe`,
         ],
       });
     }

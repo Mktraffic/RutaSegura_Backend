@@ -604,7 +604,7 @@ export class StudentsService {
         success: false,
         message: "No se pudo registrar/actualizar el estudiante",
         errors: [
-          `El tipo de documento '${documentTypeName}' no existe en el catalogo DOCUMENT_TYPE`,
+          `El tipo de documento '${documentTypeName}' no existe`,
         ],
       });
     }
