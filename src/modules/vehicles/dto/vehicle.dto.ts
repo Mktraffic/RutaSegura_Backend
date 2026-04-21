@@ -1,18 +1,18 @@
 import {
   IsDateString,
   IsInt,
-  MinLength,
   IsOptional,
   IsString,
   MaxLength,
   Min,
+  MinLength,
   ValidateNested,
 } from "class-validator";
 import { Type } from "class-transformer";
 
 class VehicleDocumentDto {
   @IsString()
-  @MinLength(1)
+  @MinLength(3)
   @MaxLength(100)
   documentNumber!: string;
 
