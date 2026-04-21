@@ -32,11 +32,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
     });
 
     if (!user || !user.role) {
-      throw new UnauthorizedException("User not found");
+      throw new UnauthorizedException("No se pudo validar el token: usuario no encontrado");
     }
 
     if (user.status && user.status.toLowerCase() !== "active") {
-      throw new UnauthorizedException("User is inactive");
+      throw new UnauthorizedException("No se pudo validar el token: usuario inactivo");
     }
 
     return {

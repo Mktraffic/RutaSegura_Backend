@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -88,7 +92,7 @@ export class AuthService {
   }
 
   async getProfile(userId: number) {
-    return this.prisma.user.findUniqueOrThrow({
+    const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
@@ -107,6 +111,16 @@ export class AuthService {
         },
       },
     });
+
+    if (!user) {
+      throw new NotFoundException({
+        success: false,
+        message: "No se pudo obtener el perfil",
+        errors: ["El usuario autenticado no existe"],
+      });
+    }
+
+    return user;
   }
 
   private parseTtlToSeconds(ttl: string): number {

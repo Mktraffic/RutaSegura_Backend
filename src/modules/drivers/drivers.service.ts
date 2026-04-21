@@ -181,10 +181,18 @@ export class DriversService {
           });
         }
 
-        const currentDocument = await tx.personDocument.findUniqueOrThrow({
+        const currentDocument = await tx.personDocument.findUnique({
           where: { id: existingLink.personDocumentId },
           select: { documentTypeId: true },
         });
+
+        if (!currentDocument) {
+          throw new BadRequestException({
+            success: false,
+            message: "No se pudo actualizar el conductor",
+            errors: ["El documento asociado del conductor no existe"],
+          });
+        }
 
         const documentTypeId = dto.document.documentType
           ? await this.resolveDocumentTypeId(dto.document.documentType)

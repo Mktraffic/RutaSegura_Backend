@@ -76,10 +76,18 @@ export class UsersService {
     await this.validateCreateBusinessRules(dto);
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
-    const role = await this.prisma.role.findUniqueOrThrow({
+    const role = await this.prisma.role.findUnique({
       where: { id: dto.roleId },
       select: { name: true },
     });
+
+    if (!role) {
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo crear el usuario",
+        errors: ["El rol indicado no existe"],
+      });
+    }
 
     return this.prisma.user.create({
       data: {
@@ -145,12 +153,22 @@ export class UsersService {
 
     const effectiveRoleName = dto.roleId
       ? (
-          await this.prisma.role.findUniqueOrThrow({
+          await this.prisma.role.findUnique({
             where: { id: dto.roleId },
             select: { name: true },
           })
-        ).name
+        )?.name
       : current.role.name;
+
+    if (dto.roleId && !effectiveRoleName) {
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo actualizar el usuario",
+        errors: ["El rol indicado no existe"],
+      });
+    }
+
+    const roleNameForUpdate = effectiveRoleName ?? current.role.name;
 
     const hashedPassword = dto.password
       ? await bcrypt.hash(dto.password, 10)
@@ -164,7 +182,7 @@ export class UsersService {
         personId: dto.personId,
         roleId: dto.roleId,
         pickupEnabled: this.resolvePickupEnabledByRole(
-          effectiveRoleName,
+          roleNameForUpdate,
           dto.pickupEnabled,
           current.pickupEnabled,
         ),

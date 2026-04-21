@@ -185,7 +185,15 @@ export class DocumentManagementService {
   }
 
   async inactivatePersonDocument(id: number) {
-    await this.ensurePersonDocumentExists(id);
+    const current = await this.ensurePersonDocumentExists(id);
+
+    if (current.status?.toUpperCase() === "INACTIVE") {
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo inactivar el documento de persona",
+        errors: ["El documento de persona ya se encuentra inactivo"],
+      });
+    }
 
     return this.prisma.personDocument.update({
       where: { id },
@@ -196,6 +204,15 @@ export class DocumentManagementService {
 
   async createVehicleDocument(dto: CreateVehicleDocumentDto) {
     const vehicle = await this.ensureVehicleExists(dto.vehiclePlate);
+
+    if (vehicle.status?.toUpperCase() === "INACTIVE") {
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo crear el documento de vehiculo",
+        errors: ["No se pueden asociar documentos a un vehiculo inactivo"],
+      });
+    }
+
     await this.ensureVehicleDocumentUnique(dto.documentType, dto.documentNumber);
 
     return this.prisma.$transaction(async (tx) => {
@@ -286,7 +303,16 @@ export class DocumentManagementService {
   }
 
   async inactivateVehicleDocument(id: number) {
-    await this.ensureVehicleDocumentExists(id);
+    const current = await this.ensureVehicleDocumentExists(id);
+
+    if (current.status?.toUpperCase() === "INACTIVE") {
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo inactivar el documento de vehiculo",
+        errors: ["El documento de vehiculo ya se encuentra inactivo"],
+      });
+    }
+
     return this.prisma.vehicleDocument.update({
       where: { id },
       data: { status: "INACTIVE" },
@@ -436,7 +462,16 @@ export class DocumentManagementService {
   }
 
   async markAlertAsRead(id: number) {
-    await this.ensureAlertExists(id);
+    const alert = await this.ensureAlertExists(id);
+
+    if (alert.isRead) {
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo actualizar la alerta",
+        errors: ["La alerta ya estaba marcada como leida"],
+      });
+    }
+
     return this.prisma.documentAlert.update({
       where: { id },
       data: {
@@ -504,7 +539,7 @@ export class DocumentManagementService {
     const normalizedPlate = plate.trim().toUpperCase();
     const vehicle = await this.prisma.vehicle.findUnique({
       where: { plate: normalizedPlate },
-      select: { plate: true },
+      select: { plate: true, status: true },
     });
     if (!vehicle) {
       throw new NotFoundException({ success: false, message: "Vehiculo no encontrado" });
@@ -515,7 +550,7 @@ export class DocumentManagementService {
   private async ensurePersonDocumentExists(id: number) {
     const doc = await this.prisma.personDocument.findUnique({
       where: { id },
-      select: { id: true, documentTypeId: true, documentNumber: true },
+      select: { id: true, documentTypeId: true, documentNumber: true, status: true },
     });
     if (!doc) {
       throw new NotFoundException({ success: false, message: "Documento de persona no encontrado" });
@@ -526,7 +561,7 @@ export class DocumentManagementService {
   private async ensureVehicleDocumentExists(id: number) {
     const doc = await this.prisma.vehicleDocument.findUnique({
       where: { id },
-      select: { id: true, documentType: true },
+      select: { id: true, documentType: true, status: true },
     });
     if (!doc) {
       throw new NotFoundException({ success: false, message: "Documento de vehiculo no encontrado" });
@@ -537,7 +572,7 @@ export class DocumentManagementService {
   private async ensureAlertExists(id: number) {
     const alert = await this.prisma.documentAlert.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, isRead: true },
     });
     if (!alert) {
       throw new NotFoundException({ success: false, message: "Alerta no encontrada" });
