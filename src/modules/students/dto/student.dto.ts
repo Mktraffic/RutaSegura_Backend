@@ -40,6 +40,34 @@ class StudentDocumentDto {
   documentRole?: string;
 }
 
+class UpdateStudentDocumentDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(50)
+  documentType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(20)
+  documentNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  createPersonDocumentLink?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  documentRole?: string;
+}
+
 class StudentAddressDto {
   @IsString()
   @MinLength(5)
@@ -142,8 +170,8 @@ export class UpdateStudentDto {
 
   @IsOptional()
   @ValidateNested()
-  @Type(() => StudentDocumentDto)
-  document?: StudentDocumentDto;
+  @Type(() => UpdateStudentDocumentDto)
+  document?: UpdateStudentDocumentDto;
 
   @IsOptional()
   @IsArray()

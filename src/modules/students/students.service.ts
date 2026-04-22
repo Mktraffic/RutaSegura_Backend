@@ -120,46 +120,47 @@ export class StudentsService {
       });
 
       if (dto.document) {
-        const documentTypeId = await this.resolveDocumentTypeId(
-          dto.document.documentType,
-        );
-
         const existingLink = await tx.personDocumentLink.findFirst({
           where: { personId: id },
           orderBy: { id: "asc" },
           select: { id: true, personDocumentId: true },
         });
 
-        if (existingLink) {
-          await tx.personDocument.update({
-            where: { id: existingLink.personDocumentId },
-            data: {
-              documentTypeId,
-              documentNumber: dto.document.documentNumber,
-              description: dto.document.description,
-              status: "ACTIVE",
-            },
+        if (!existingLink) {
+          throw new BadRequestException({
+            success: false,
+            message: "No se pudo actualizar el estudiante",
+            errors: [
+              "El estudiante no tiene documento asociado para actualizar",
+            ],
           });
-        } else {
-          const document = await tx.personDocument.create({
-            data: {
-              documentTypeId,
-              documentNumber: dto.document.documentNumber,
-              description: dto.document.description,
-              status: "ACTIVE",
-            },
-          });
-
-          if (dto.document.createPersonDocumentLink ?? true) {
-            await tx.personDocumentLink.create({
-              data: {
-                personId: id,
-                personDocumentId: document.id,
-                documentRole: dto.document.documentRole ?? "student",
-              },
-            });
-          }
         }
+
+        const currentDocument = await tx.personDocument.findUnique({
+          where: { id: existingLink.personDocumentId },
+          select: { documentTypeId: true },
+        });
+
+        if (!currentDocument) {
+          throw new BadRequestException({
+            success: false,
+            message: "No se pudo actualizar el estudiante",
+            errors: ["El documento asociado del estudiante no existe"],
+          });
+        }
+
+        const documentTypeId = dto.document.documentType
+          ? await this.resolveDocumentTypeId(dto.document.documentType)
+          : currentDocument.documentTypeId;
+
+        await tx.personDocument.update({
+          where: { id: existingLink.personDocumentId },
+          data: {
+            documentTypeId,
+            description: dto.document.description,
+            status: "ACTIVE",
+          },
+        });
       }
 
       if (dto.addresses) {
@@ -464,18 +465,12 @@ export class StudentsService {
 
     const duplicateDoc = await this.prisma.personDocument.findFirst({
       where: {
-        documentType: {
-          name: {
-            equals: dto.document.documentType,
-            mode: "insensitive",
-          },
-        },
         documentNumber: dto.document.documentNumber,
       },
       select: { id: true },
     });
     if (duplicateDoc) {
-      errors.push("Ya existe un documento con ese tipo y numero");
+      errors.push("Ya existe una persona con ese numero de documento");
     }
 
     const duplicateEmail = await this.prisma.person.findFirst({
@@ -512,23 +507,10 @@ export class StudentsService {
     }
 
     if (dto.document) {
-      const duplicateDoc = await this.prisma.personDocument.findFirst({
-        where: {
-          documentType: {
-            name: {
-              equals: dto.document.documentType,
-              mode: "insensitive",
-            },
-          },
-          documentNumber: dto.document.documentNumber,
-          personDocumentLinks: {
-            none: { personId: studentId },
-          },
-        },
-        select: { id: true },
-      });
-      if (duplicateDoc) {
-        errors.push("Ya existe un documento con ese tipo y numero");
+      if (dto.document.documentNumber) {
+        errors.push(
+          "No puedes modificar el numero de documento desde la edicion de estudiante",
+        );
       }
     }
 
@@ -604,7 +586,7 @@ export class StudentsService {
         success: false,
         message: "No se pudo registrar/actualizar el estudiante",
         errors: [
-          `El tipo de documento '${documentTypeName}' no existe en el catalogo DOCUMENT_TYPE`,
+          `El tipo de documento '${documentTypeName}' no existe`,
         ],
       });
     }

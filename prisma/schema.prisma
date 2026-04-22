@@ -41,7 +41,7 @@ model DocumentType {
 model PersonDocument {
   id             Int       @id @default(autoincrement())
   documentTypeId Int       @map("document_type_id")
-  documentNumber String    @map("document_number") @db.VarChar(20)
+  documentNumber String    @unique @map("document_number") @db.VarChar(20)
   description    String?   @db.VarChar(200)
   issueDate      DateTime? @map("issue_date") @db.Date
   expiryDate     DateTime? @map("expiry_date") @db.Date

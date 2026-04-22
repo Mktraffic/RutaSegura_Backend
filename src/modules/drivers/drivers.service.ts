@@ -181,10 +181,18 @@ export class DriversService {
           });
         }
 
-        const currentDocument = await tx.personDocument.findUniqueOrThrow({
+        const currentDocument = await tx.personDocument.findUnique({
           where: { id: existingLink.personDocumentId },
           select: { documentTypeId: true },
         });
+
+        if (!currentDocument) {
+          throw new BadRequestException({
+            success: false,
+            message: "No se pudo actualizar el conductor",
+            errors: ["El documento asociado del conductor no existe"],
+          });
+        }
 
         const documentTypeId = dto.document.documentType
           ? await this.resolveDocumentTypeId(dto.document.documentType)
@@ -194,7 +202,6 @@ export class DriversService {
           where: { id: existingLink.personDocumentId },
           data: {
             documentTypeId,
-            documentNumber: dto.document.documentNumber,
             description: dto.document.description,
             status: "ACTIVE",
           },
@@ -250,18 +257,12 @@ export class DriversService {
 
     const duplicateDoc = await this.prisma.personDocument.findFirst({
       where: {
-        documentType: {
-          name: {
-            equals: dto.document.documentType,
-            mode: "insensitive",
-          },
-        },
         documentNumber: dto.document.documentNumber,
       },
       select: { id: true },
     });
     if (duplicateDoc) {
-      errors.push("Ya existe un documento con ese tipo y numero");
+      errors.push("Ya existe una persona con ese numero de documento");
     }
 
     if (errors.length) {
@@ -289,30 +290,15 @@ export class DriversService {
       }
     }
 
-    if (dto.document?.documentType || dto.document?.documentNumber) {
-      if (!dto.document?.documentType || !dto.document?.documentNumber) {
+    if (dto.document) {
+      if (dto.document.documentNumber) {
         errors.push(
-          "Para actualizar documento debes enviar documentType y documentNumber",
+          "No puedes modificar el numero de documento desde la edicion de conductor",
         );
-      } else {
-        const duplicateDoc = await this.prisma.personDocument.findFirst({
-          where: {
-            documentType: {
-              name: {
-                equals: dto.document.documentType,
-                mode: "insensitive",
-              },
-            },
-            documentNumber: dto.document.documentNumber,
-            personDocumentLinks: {
-              none: { personId: id },
-            },
-          },
-          select: { id: true },
-        });
-        if (duplicateDoc) {
-          errors.push("Ya existe un documento con ese tipo y numero");
-        }
+      }
+
+      if (dto.document.documentType) {
+        await this.resolveDocumentTypeId(dto.document.documentType);
       }
     }
 
@@ -388,9 +374,9 @@ export class DriversService {
     if (!documentType) {
       throw new BadRequestException({
         success: false,
-        message: "No se pudo procesar el documento",
+        message: "No pudimos guardar el documento",
         errors: [
-          `El tipo de documento '${documentTypeName}' no existe en el catalogo DOCUMENT_TYPE`,
+          `El tipo de documento '${documentTypeName}' no existe`,
         ],
       });
     }
