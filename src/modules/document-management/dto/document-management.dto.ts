@@ -9,6 +9,7 @@ import {
   Min,
   MinLength,
 } from "class-validator";
+import { Transform } from "class-transformer";
 import { Type } from "class-transformer";
 
 export class CreateDocumentTypeDto {
@@ -176,9 +177,39 @@ export class AlertQueryDto {
   vehiclePlate?: string;
 
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === "") {
+      return undefined;
+    }
+
+    if (value === true || value === "true") {
+      return true;
+    }
+
+    if (value === false || value === "false") {
+      return false;
+    }
+
+    return value;
+  })
   @IsBoolean()
   isRead?: boolean;
+
+  @IsOptional()
+  @IsIn(["EXPIRY_WARNING", "EXPIRY_INFO", "EXPIRED"])
+  alertType?: "EXPIRY_WARNING" | "EXPIRY_INFO" | "EXPIRED";
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  limit?: number;
 
   @IsOptional()
   @IsString()

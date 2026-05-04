@@ -330,7 +330,6 @@ export class DocumentManagementService {
       where: {
         status: { not: "INACTIVE" },
         expiryDate: {
-          gte: today,
           lte: endDate,
         },
       },
@@ -344,32 +343,24 @@ export class DocumentManagementService {
     });
 
     for (const doc of personDocs) {
+      if (!doc.expiryDate) continue;
+
+      const daysRemaining = this.calculateDaysRemaining(today, doc.expiryDate);
+      const alertType = this.resolveAlertType(daysRemaining, daysAhead);
+
+      if (!alertType) continue;
+
       for (const link of doc.personDocumentLinks) {
-        const exists = await this.prisma.documentAlert.findFirst({
-          where: {
-            personDocumentId: doc.id,
-            personId: link.personId,
-            isRead: false,
-          },
-          select: { id: true },
+        const createdAlert = await this.createDocumentAlertIfNeeded({
+          alertType,
+          personDocumentId: doc.id,
+          personId: link.personId,
+          documentExpiryDate: doc.expiryDate,
+          daysRemaining,
+          message: this.buildDocumentAlertMessage("person", doc.documentNumber, daysRemaining),
         });
 
-        if (!exists && doc.expiryDate) {
-          const daysRemaining = Math.ceil(
-            (doc.expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-          );
-
-          await this.prisma.documentAlert.create({
-            data: {
-              personDocumentId: doc.id,
-              personId: link.personId,
-              alertType: "EXPIRY_WARNING",
-              message: `Documento de persona vence en ${daysRemaining} dias`,
-              documentExpiryDate: doc.expiryDate,
-              daysRemaining,
-              isRead: false,
-            },
-          });
+        if (createdAlert) {
           created += 1;
         }
       }
@@ -379,7 +370,6 @@ export class DocumentManagementService {
       where: {
         status: { not: "INACTIVE" },
         expiryDate: {
-          gte: today,
           lte: endDate,
         },
       },
@@ -400,65 +390,55 @@ export class DocumentManagementService {
 
       if (!vehiclePlate || !doc.expiryDate) continue;
 
-      const exists = await this.prisma.documentAlert.findFirst({
-        where: {
-          vehicleDocumentId: doc.id,
-          vehiclePlate,
-          isRead: false,
-        },
-        select: { id: true },
+      const daysRemaining = this.calculateDaysRemaining(today, doc.expiryDate);
+      const alertType = this.resolveAlertType(daysRemaining, daysAhead);
+
+      if (!alertType) continue;
+
+      const createdAlert = await this.createDocumentAlertIfNeeded({
+        alertType,
+        vehicleDocumentId: doc.id,
+        vehiclePlate,
+        documentExpiryDate: doc.expiryDate,
+        daysRemaining,
+        message: this.buildDocumentAlertMessage("vehicle", doc.documentType, daysRemaining),
       });
 
-      if (exists) continue;
-
-      const daysRemaining = Math.ceil(
-        (doc.expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-      );
-
-      await this.prisma.documentAlert.create({
-        data: {
-          vehicleDocumentId: doc.id,
-          vehiclePlate,
-          alertType: "EXPIRY_WARNING",
-          message: `Documento vehicular ${doc.documentType} vence en ${daysRemaining} dias`,
-          documentExpiryDate: doc.expiryDate,
-          daysRemaining,
-          isRead: false,
-        },
-      });
-      created += 1;
+      if (createdAlert) {
+        created += 1;
+      }
     }
 
     return { created, daysAhead };
   }
 
   async findAlerts(filters: AlertQueryDto) {
-    return this.prisma.documentAlert.findMany({
-      where: {
-        ...(typeof filters.isRead === "boolean" ? { isRead: filters.isRead } : {}),
-        ...(filters.personId ? { personId: filters.personId } : {}),
-        ...(filters.vehiclePlate
-          ? { vehiclePlate: filters.vehiclePlate.trim().toUpperCase() }
-          : {}),
-        ...(filters.daysAhead
-          ? {
-              daysRemaining: {
-                lte: filters.daysAhead,
-              },
-            }
-          : {}),
-        ...(filters.q
-          ? {
-              OR: [
-                { message: { contains: filters.q, mode: "insensitive" } },
-                { alertType: { contains: filters.q, mode: "insensitive" } },
-                { vehiclePlate: { contains: filters.q, mode: "insensitive" } },
-              ],
-            }
-          : {}),
+    const where = this.buildAlertWhere(filters);
+    const page = filters.page ?? 1;
+    const limit = filters.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const [totalItems, alerts] = await this.prisma.$transaction([
+      this.prisma.documentAlert.count({ where }),
+      this.prisma.documentAlert.findMany({
+        where,
+        orderBy: [{ isRead: "asc" }, { generatedAt: "desc" }],
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    const items = alerts.map((alert) => this.decorateAlert(alert));
+
+    return {
+      items,
+      meta: {
+        totalItems,
+        totalPages: Math.max(1, Math.ceil(totalItems / limit)),
+        page,
+        limit,
       },
-      orderBy: [{ isRead: "asc" }, { generatedAt: "desc" }],
-    });
+    };
   }
 
   async markAlertAsRead(id: number) {
@@ -479,6 +459,151 @@ export class DocumentManagementService {
         readAt: new Date(),
       },
     });
+  }
+
+  private decorateAlert(alert: {
+    alertType: string | null;
+    daysRemaining: number | null;
+    isRead: boolean;
+    [key: string]: unknown;
+  }) {
+    return {
+      ...alert,
+      classification: this.classifyAlert(alert),
+      readState: alert.isRead ? "READ" : "UNREAD",
+    };
+  }
+
+  private classifyAlert(alert: {
+    alertType: string | null;
+    daysRemaining: number | null;
+  }) {
+    if (alert.alertType === "EXPIRED" || (alert.daysRemaining ?? 0) < 0) {
+      return "EXPIRED";
+    }
+
+    if (alert.alertType === "EXPIRY_WARNING") {
+      return "EXPIRING_SOON";
+    }
+
+    return "UPCOMING";
+  }
+
+  private buildDocumentAlertMessage(
+    scope: "person" | "vehicle",
+    documentLabel: string,
+    daysRemaining: number,
+  ) {
+    const absoluteDays = Math.abs(daysRemaining);
+
+    if (daysRemaining < 0) {
+      return scope === "person"
+        ? `Documento de persona ${documentLabel} vencido hace ${absoluteDays} dias`
+        : `Documento vehicular ${documentLabel} vencido hace ${absoluteDays} dias`;
+    }
+
+    return scope === "person"
+      ? `Documento de persona ${documentLabel} vence en ${daysRemaining} dias`
+      : `Documento vehicular ${documentLabel} vence en ${daysRemaining} dias`;
+  }
+
+  private resolveAlertType(daysRemaining: number, daysAhead: number) {
+    if (daysRemaining < 0) {
+      return "EXPIRED" as const;
+    }
+
+    if (daysRemaining <= daysAhead) {
+      return "EXPIRY_WARNING" as const;
+    }
+
+    return null;
+  }
+
+  private calculateDaysRemaining(today: Date, expiryDate: Date) {
+    return Math.ceil(
+      (expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    );
+  }
+
+  private async createDocumentAlertIfNeeded(payload: {
+    alertType: "EXPIRY_WARNING" | "EXPIRY_INFO" | "EXPIRED";
+    personDocumentId?: number;
+    personId?: number;
+    vehicleDocumentId?: number;
+    vehiclePlate?: string;
+    documentExpiryDate: Date;
+    daysRemaining: number;
+    message: string;
+  }) {
+    const exists = await this.prisma.documentAlert.findFirst({
+      where: {
+        alertType: payload.alertType,
+        ...(payload.personDocumentId
+          ? {
+              personDocumentId: payload.personDocumentId,
+              personId: payload.personId,
+            }
+          : {}),
+        ...(payload.vehicleDocumentId
+          ? {
+              vehicleDocumentId: payload.vehicleDocumentId,
+              vehiclePlate: payload.vehiclePlate,
+            }
+          : {}),
+      },
+      select: { id: true },
+    });
+
+    if (exists) {
+      return false;
+    }
+
+    await this.prisma.documentAlert.create({
+      data: {
+        ...payload,
+        message: payload.message,
+        isRead: false,
+      },
+    });
+
+    return true;
+  }
+
+  private buildAlertWhere(filters: AlertQueryDto): Prisma.DocumentAlertWhereInput {
+    return {
+      ...(typeof filters.isRead === "boolean" ? { isRead: filters.isRead } : {}),
+      ...(filters.personId ? { personId: filters.personId } : {}),
+      ...(filters.vehiclePlate
+        ? { vehiclePlate: filters.vehiclePlate.trim().toUpperCase() }
+        : {}),
+      ...(filters.daysAhead
+        ? {
+            daysRemaining: {
+              lte: filters.daysAhead,
+            },
+          }
+        : {}),
+      ...(filters.alertType ? { alertType: filters.alertType } : {}),
+      ...(filters.q
+        ? {
+            OR: [
+              { message: { contains: filters.q, mode: "insensitive" } },
+              { alertType: { contains: filters.q, mode: "insensitive" } },
+              { vehiclePlate: { contains: filters.q, mode: "insensitive" } },
+              {
+                personDocument: {
+                  documentNumber: { contains: filters.q, mode: "insensitive" },
+                },
+              },
+              {
+                vehicleDocument: {
+                  documentNumber: { contains: filters.q, mode: "insensitive" },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
   }
 
   private readonly personDocumentSelect = {
