@@ -182,14 +182,20 @@ export class RoutesService {
     return this.prisma.$transaction(async (tx) => {
       const updateData: Prisma.RouteUpdateInput = {
         name: dto.name?.trim(),
-        zoneId: dto.zoneId,
-        destinationId: dto.destinationId,
         originDescription: dto.originDescription,
         startTime: dto.startTime ? this.parseTime(dto.startTime) : undefined,
         endTime: dto.endTime ? this.parseTime(dto.endTime) : undefined,
-        vehiclePlate: dto.vehiclePlate?.trim().toUpperCase(),
-        driverPersonId: dto.driverPersonId,
         status: dto.status,
+        zone: dto.zoneId ? { connect: { id: dto.zoneId } } : undefined,
+        destination: dto.destinationId
+          ? { connect: { id: dto.destinationId } }
+          : undefined,
+        vehicle: dto.vehiclePlate
+          ? { connect: { plate: dto.vehiclePlate.trim().toUpperCase() } }
+          : undefined,
+        driver: dto.driverPersonId
+          ? { connect: { id: dto.driverPersonId } }
+          : undefined,
       };
 
       await tx.route.update({
