@@ -19,6 +19,8 @@ import {
 export class DocumentManagementService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private readonly defaultAlertDaysAhead = 30;
+
   async findDocumentTypes(query?: string) {
     return this.prisma.documentType.findMany({
       where: query
@@ -94,7 +96,7 @@ export class DocumentManagementService {
     const documentTypeId = await this.resolveDocumentTypeId(dto.documentType);
     await this.ensurePersonDocumentUnique(documentTypeId, dto.documentNumber);
 
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       const document = await tx.personDocument.create({
         data: {
           documentTypeId,
@@ -120,6 +122,12 @@ export class DocumentManagementService {
         select: this.personDocumentSelect,
       });
     });
+
+    if (created) {
+      await this.refreshPersonDocumentAlerts(created.id);
+    }
+
+    return created;
   }
 
   async findPersonDocuments(query?: string) {
@@ -169,7 +177,7 @@ export class DocumentManagementService {
       );
     }
 
-    return this.prisma.personDocument.update({
+    const updated = await this.prisma.personDocument.update({
       where: { id },
       data: {
         documentTypeId: nextDocumentTypeId,
@@ -182,6 +190,10 @@ export class DocumentManagementService {
       },
       select: this.personDocumentSelect,
     });
+
+    await this.refreshPersonDocumentAlerts(updated.id);
+
+    return updated;
   }
 
   async inactivatePersonDocument(id: number) {
@@ -195,11 +207,15 @@ export class DocumentManagementService {
       });
     }
 
-    return this.prisma.personDocument.update({
+    const updated = await this.prisma.personDocument.update({
       where: { id },
       data: { status: "INACTIVE" },
       select: this.personDocumentSelect,
     });
+
+    await this.refreshPersonDocumentAlerts(updated.id);
+
+    return updated;
   }
 
   async createVehicleDocument(dto: CreateVehicleDocumentDto) {
@@ -215,7 +231,7 @@ export class DocumentManagementService {
 
     await this.ensureVehicleDocumentUnique(dto.documentType, dto.documentNumber);
 
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       const document = await tx.vehicleDocument.create({
         data: {
           documentType: dto.documentType,
@@ -248,6 +264,12 @@ export class DocumentManagementService {
         where: { id: document.id },
       });
     });
+
+    if (created) {
+      await this.refreshVehicleDocumentAlerts(created.id);
+    }
+
+    return created;
   }
 
   async findVehicleDocuments(query?: string) {
@@ -290,7 +312,7 @@ export class DocumentManagementService {
       );
     }
 
-    return this.prisma.vehicleDocument.update({
+    const updated = await this.prisma.vehicleDocument.update({
       where: { id },
       data: {
         documentNumber: dto.documentNumber,
@@ -300,6 +322,10 @@ export class DocumentManagementService {
         status: dto.status,
       },
     });
+
+    await this.refreshVehicleDocumentAlerts(updated.id);
+
+    return updated;
   }
 
   async inactivateVehicleDocument(id: number) {
@@ -313,106 +339,31 @@ export class DocumentManagementService {
       });
     }
 
-    return this.prisma.vehicleDocument.update({
+    const updated = await this.prisma.vehicleDocument.update({
       where: { id },
       data: { status: "INACTIVE" },
     });
+
+    await this.refreshVehicleDocumentAlerts(updated.id);
+
+    return updated;
   }
 
-  async generateExpiryAlerts(daysAhead = 30) {
-    const today = new Date();
-    const endDate = new Date(today);
-    endDate.setDate(endDate.getDate() + daysAhead);
-
-    let created = 0;
-
-    const personDocs = await this.prisma.personDocument.findMany({
-      where: {
-        status: { not: "INACTIVE" },
-        expiryDate: {
-          lte: endDate,
-        },
-      },
-      include: {
-        personDocumentLinks: {
-          select: {
-            personId: true,
-          },
-        },
-      },
-    });
-
-    for (const doc of personDocs) {
-      if (!doc.expiryDate) continue;
-
-      const daysRemaining = this.calculateDaysRemaining(today, doc.expiryDate);
-      const alertType = this.resolveAlertType(daysRemaining, daysAhead);
-
-      if (!alertType) continue;
-
-      for (const link of doc.personDocumentLinks) {
-        const createdAlert = await this.createDocumentAlertIfNeeded({
-          alertType,
-          personDocumentId: doc.id,
-          personId: link.personId,
-          documentExpiryDate: doc.expiryDate,
-          daysRemaining,
-          message: this.buildDocumentAlertMessage("person", doc.documentNumber, daysRemaining),
-        });
-
-        if (createdAlert) {
-          created += 1;
-        }
-      }
-    }
-
-    const vehicleDocs = await this.prisma.vehicleDocument.findMany({
-      where: {
-        status: { not: "INACTIVE" },
-        expiryDate: {
-          lte: endDate,
-        },
-      },
-      include: {
-        vehicleAsSoat: { select: { plate: true } },
-        vehicleAsTechnicalInspection: { select: { plate: true } },
-        vehicleAsInsurance: { select: { plate: true } },
-        vehicleAsPropertyCard: { select: { plate: true } },
-      },
-    });
-
-    for (const doc of vehicleDocs) {
-      const vehiclePlate =
-        doc.vehicleAsSoat?.plate ??
-        doc.vehicleAsTechnicalInspection?.plate ??
-        doc.vehicleAsInsurance?.plate ??
-        doc.vehicleAsPropertyCard?.plate;
-
-      if (!vehiclePlate || !doc.expiryDate) continue;
-
-      const daysRemaining = this.calculateDaysRemaining(today, doc.expiryDate);
-      const alertType = this.resolveAlertType(daysRemaining, daysAhead);
-
-      if (!alertType) continue;
-
-      const createdAlert = await this.createDocumentAlertIfNeeded({
-        alertType,
-        vehicleDocumentId: doc.id,
-        vehiclePlate,
-        documentExpiryDate: doc.expiryDate,
-        daysRemaining,
-        message: this.buildDocumentAlertMessage("vehicle", doc.documentType, daysRemaining),
-      });
-
-      if (createdAlert) {
-        created += 1;
-      }
-    }
-
-    return { created, daysAhead };
+  async generateExpiryAlerts(daysAhead = this.defaultAlertDaysAhead) {
+    const summary = await this.syncExpiryAlerts(daysAhead);
+    return {
+      ...summary,
+      daysAhead,
+    };
   }
 
   async findAlerts(filters: AlertQueryDto) {
+    const syncDaysAhead = filters.daysAhead
+      ? Math.max(filters.daysAhead, this.defaultAlertDaysAhead)
+      : this.defaultAlertDaysAhead;
+
+    await this.syncExpiryAlerts(syncDaysAhead);
+
     const where = this.buildAlertWhere(filters);
     const page = filters.page ?? 1;
     const limit = filters.limit ?? 20;
@@ -489,22 +440,36 @@ export class DocumentManagementService {
     return "UPCOMING";
   }
 
+  private resolveVehicleDocumentLabel(documentType: string) {
+    const normalized = documentType.trim().toUpperCase();
+    const mapping: Record<string, string> = {
+      SOAT: "SOAT",
+      TECHNICAL_INSPECTION: "TECNOMECÁNICA",
+      INSURANCE: "SEGURO",
+      PROPERTY_CARD: "TARJETA DE PROPIEDAD",
+    };
+
+    return mapping[normalized] ?? documentType;
+  }
+
   private buildDocumentAlertMessage(
     scope: "person" | "vehicle",
     documentLabel: string,
     daysRemaining: number,
   ) {
     const absoluteDays = Math.abs(daysRemaining);
+    const normalizedLabel =
+      scope === "vehicle" ? this.resolveVehicleDocumentLabel(documentLabel) : documentLabel;
 
     if (daysRemaining < 0) {
       return scope === "person"
-        ? `Documento de persona ${documentLabel} vencido hace ${absoluteDays} dias`
-        : `Documento vehicular ${documentLabel} vencido hace ${absoluteDays} dias`;
+        ? `Documento de persona ${normalizedLabel} vencido hace ${absoluteDays} dias`
+        : `Documento vehicular ${normalizedLabel} vencido hace ${absoluteDays} dias`;
     }
 
     return scope === "person"
-      ? `Documento de persona ${documentLabel} vence en ${daysRemaining} dias`
-      : `Documento vehicular ${documentLabel} vence en ${daysRemaining} dias`;
+      ? `Documento de persona ${normalizedLabel} vence en ${daysRemaining} dias`
+      : `Documento vehicular ${normalizedLabel} vence en ${daysRemaining} dias`;
   }
 
   private resolveAlertType(daysRemaining: number, daysAhead: number) {
@@ -525,48 +490,390 @@ export class DocumentManagementService {
     );
   }
 
-  private async createDocumentAlertIfNeeded(payload: {
+  private isVehicleDocumentAlertable(documentType: string | null | undefined) {
+    if (!documentType) return false;
+    return documentType.trim().toUpperCase() !== "PROPERTY_CARD";
+  }
+
+  private async upsertPersonDocumentAlert(payload: {
     alertType: "EXPIRY_WARNING" | "EXPIRY_INFO" | "EXPIRED";
-    personDocumentId?: number;
-    personId?: number;
-    vehicleDocumentId?: number;
-    vehiclePlate?: string;
+    personDocumentId: number;
+    personId: number;
     documentExpiryDate: Date;
     daysRemaining: number;
     message: string;
   }) {
-    const exists = await this.prisma.documentAlert.findFirst({
+    const existing = await this.prisma.documentAlert.findFirst({
       where: {
-        alertType: payload.alertType,
-        ...(payload.personDocumentId
-          ? {
-              personDocumentId: payload.personDocumentId,
-              personId: payload.personId,
-            }
-          : {}),
-        ...(payload.vehicleDocumentId
-          ? {
-              vehicleDocumentId: payload.vehicleDocumentId,
-              vehiclePlate: payload.vehiclePlate,
-            }
-          : {}),
+        personDocumentId: payload.personDocumentId,
+        personId: payload.personId,
       },
-      select: { id: true },
+      select: { id: true, alertType: true },
     });
 
-    if (exists) {
-      return false;
+    if (existing) {
+      const shouldResetRead = existing.alertType !== payload.alertType;
+      await this.prisma.documentAlert.update({
+        where: { id: existing.id },
+        data: {
+          alertType: payload.alertType,
+          message: payload.message,
+          documentExpiryDate: payload.documentExpiryDate,
+          daysRemaining: payload.daysRemaining,
+          ...(shouldResetRead
+            ? {
+                isRead: false,
+                readAt: null,
+                generatedAt: new Date(),
+              }
+            : {}),
+        },
+      });
+
+      await this.prisma.documentAlert.deleteMany({
+        where: {
+          personDocumentId: payload.personDocumentId,
+          personId: payload.personId,
+          id: { not: existing.id },
+        },
+      });
+
+      return { created: false, updated: true };
     }
 
     await this.prisma.documentAlert.create({
       data: {
         ...payload,
-        message: payload.message,
         isRead: false,
       },
     });
 
-    return true;
+    return { created: true, updated: false };
+  }
+
+  private async upsertVehicleDocumentAlert(payload: {
+    alertType: "EXPIRY_WARNING" | "EXPIRY_INFO" | "EXPIRED";
+    vehicleDocumentId: number;
+    vehiclePlate: string;
+    documentExpiryDate: Date;
+    daysRemaining: number;
+    message: string;
+  }) {
+    const existing = await this.prisma.documentAlert.findFirst({
+      where: {
+        vehicleDocumentId: payload.vehicleDocumentId,
+        vehiclePlate: payload.vehiclePlate,
+      },
+      select: { id: true, alertType: true },
+    });
+
+    if (existing) {
+      const shouldResetRead = existing.alertType !== payload.alertType;
+      await this.prisma.documentAlert.update({
+        where: { id: existing.id },
+        data: {
+          alertType: payload.alertType,
+          message: payload.message,
+          documentExpiryDate: payload.documentExpiryDate,
+          daysRemaining: payload.daysRemaining,
+          ...(shouldResetRead
+            ? {
+                isRead: false,
+                readAt: null,
+                generatedAt: new Date(),
+              }
+            : {}),
+        },
+      });
+
+      await this.prisma.documentAlert.deleteMany({
+        where: {
+          vehicleDocumentId: payload.vehicleDocumentId,
+          vehiclePlate: payload.vehiclePlate,
+          id: { not: existing.id },
+        },
+      });
+
+      return { created: false, updated: true };
+    }
+
+    await this.prisma.documentAlert.create({
+      data: {
+        ...payload,
+        isRead: false,
+      },
+    });
+
+    return { created: true, updated: false };
+  }
+
+  private async clearPersonDocumentAlerts(
+    documentId: number,
+    keepPersonIds?: number[],
+  ) {
+    if (keepPersonIds && keepPersonIds.length > 0) {
+      const removed = await this.prisma.documentAlert.deleteMany({
+        where: {
+          personDocumentId: documentId,
+          personId: { notIn: keepPersonIds },
+        },
+      });
+      return removed.count;
+    }
+
+    const removed = await this.prisma.documentAlert.deleteMany({
+      where: {
+        personDocumentId: documentId,
+      },
+    });
+    return removed.count;
+  }
+
+  private async clearVehicleDocumentAlerts(documentId: number) {
+    const removed = await this.prisma.documentAlert.deleteMany({
+      where: {
+        vehicleDocumentId: documentId,
+      },
+    });
+    return removed.count;
+  }
+
+  private async refreshPersonDocumentAlerts(
+    documentId: number,
+    daysAhead = this.defaultAlertDaysAhead,
+  ) {
+    const doc = await this.prisma.personDocument.findUnique({
+      where: { id: documentId },
+      include: {
+        personDocumentLinks: {
+          select: {
+            personId: true,
+          },
+        },
+      },
+    });
+
+    if (!doc) return;
+
+    if (doc.status?.toUpperCase() === "INACTIVE" || !doc.expiryDate) {
+      await this.clearPersonDocumentAlerts(documentId);
+      return;
+    }
+
+    if (doc.personDocumentLinks.length === 0) {
+      await this.clearPersonDocumentAlerts(documentId);
+      return;
+    }
+
+    const daysRemaining = this.calculateDaysRemaining(new Date(), doc.expiryDate);
+    const alertType = this.resolveAlertType(daysRemaining, daysAhead);
+
+    if (!alertType) {
+      await this.clearPersonDocumentAlerts(documentId);
+      return;
+    }
+
+    for (const link of doc.personDocumentLinks) {
+      await this.upsertPersonDocumentAlert({
+        alertType,
+        personDocumentId: doc.id,
+        personId: link.personId,
+        documentExpiryDate: doc.expiryDate,
+        daysRemaining,
+        message: this.buildDocumentAlertMessage("person", doc.documentNumber, daysRemaining),
+      });
+    }
+
+    const personIds = doc.personDocumentLinks.map((link) => link.personId);
+    await this.clearPersonDocumentAlerts(doc.id, personIds);
+  }
+
+  private async refreshVehicleDocumentAlerts(
+    documentId: number,
+    daysAhead = this.defaultAlertDaysAhead,
+  ) {
+    const doc = await this.prisma.vehicleDocument.findUnique({
+      where: { id: documentId },
+      include: {
+        vehicleAsSoat: { select: { plate: true } },
+        vehicleAsTechnicalInspection: { select: { plate: true } },
+        vehicleAsInsurance: { select: { plate: true } },
+        vehicleAsPropertyCard: { select: { plate: true } },
+      },
+    });
+
+    if (!doc) return;
+
+    if (
+      doc.status?.toUpperCase() === "INACTIVE" ||
+      !doc.expiryDate ||
+      !this.isVehicleDocumentAlertable(doc.documentType)
+    ) {
+      await this.clearVehicleDocumentAlerts(documentId);
+      return;
+    }
+
+    const vehiclePlate =
+      doc.vehicleAsSoat?.plate ??
+      doc.vehicleAsTechnicalInspection?.plate ??
+      doc.vehicleAsInsurance?.plate ??
+      doc.vehicleAsPropertyCard?.plate;
+
+    if (!vehiclePlate) {
+      await this.clearVehicleDocumentAlerts(documentId);
+      return;
+    }
+
+    const daysRemaining = this.calculateDaysRemaining(new Date(), doc.expiryDate);
+    const alertType = this.resolveAlertType(daysRemaining, daysAhead);
+
+    if (!alertType) {
+      await this.clearVehicleDocumentAlerts(documentId);
+      return;
+    }
+
+    await this.upsertVehicleDocumentAlert({
+      alertType,
+      vehicleDocumentId: doc.id,
+      vehiclePlate,
+      documentExpiryDate: doc.expiryDate,
+      daysRemaining,
+      message: this.buildDocumentAlertMessage("vehicle", doc.documentType, daysRemaining),
+    });
+  }
+
+  private async syncExpiryAlerts(daysAhead: number) {
+    const today = new Date();
+    let created = 0;
+    let updated = 0;
+    let removed = 0;
+
+    const clearedPerson = await this.prisma.documentAlert.deleteMany({
+      where: {
+        personDocumentId: { not: null },
+        OR: [
+          { personDocument: { status: "INACTIVE" } },
+          { personDocument: { expiryDate: null } },
+        ],
+      },
+    });
+    removed += clearedPerson.count;
+
+    const personDocs = await this.prisma.personDocument.findMany({
+      where: {
+        status: { not: "INACTIVE" },
+        expiryDate: { not: null },
+      },
+      include: {
+        personDocumentLinks: {
+          select: {
+            personId: true,
+          },
+        },
+      },
+    });
+
+    for (const doc of personDocs) {
+      if (!doc.expiryDate || doc.personDocumentLinks.length === 0) {
+        removed += await this.clearPersonDocumentAlerts(doc.id);
+        continue;
+      }
+
+      const daysRemaining = this.calculateDaysRemaining(today, doc.expiryDate);
+      const alertType = this.resolveAlertType(daysRemaining, daysAhead);
+
+      if (!alertType) {
+        removed += await this.clearPersonDocumentAlerts(doc.id);
+        continue;
+      }
+
+      for (const link of doc.personDocumentLinks) {
+        const result = await this.upsertPersonDocumentAlert({
+          alertType,
+          personDocumentId: doc.id,
+          personId: link.personId,
+          documentExpiryDate: doc.expiryDate,
+          daysRemaining,
+          message: this.buildDocumentAlertMessage("person", doc.documentNumber, daysRemaining),
+        });
+
+        if (result.created) created += 1;
+        if (result.updated) updated += 1;
+      }
+
+      const personIds = doc.personDocumentLinks.map((link) => link.personId);
+      removed += await this.clearPersonDocumentAlerts(doc.id, personIds);
+    }
+
+    const clearedVehicle = await this.prisma.documentAlert.deleteMany({
+      where: {
+        vehicleDocumentId: { not: null },
+        OR: [
+          { vehicleDocument: { status: "INACTIVE" } },
+          { vehicleDocument: { expiryDate: null } },
+          { vehicleDocument: { documentType: "PROPERTY_CARD" } },
+        ],
+      },
+    });
+    removed += clearedVehicle.count;
+
+    const vehicleDocs = await this.prisma.vehicleDocument.findMany({
+      where: {
+        status: { not: "INACTIVE" },
+        expiryDate: { not: null },
+        documentType: { not: "PROPERTY_CARD" },
+      },
+      include: {
+        vehicleAsSoat: { select: { plate: true } },
+        vehicleAsTechnicalInspection: { select: { plate: true } },
+        vehicleAsInsurance: { select: { plate: true } },
+        vehicleAsPropertyCard: { select: { plate: true } },
+      },
+    });
+
+    for (const doc of vehicleDocs) {
+      if (!doc.expiryDate || !this.isVehicleDocumentAlertable(doc.documentType)) {
+        removed += await this.clearVehicleDocumentAlerts(doc.id);
+        continue;
+      }
+
+      const vehiclePlate =
+        doc.vehicleAsSoat?.plate ??
+        doc.vehicleAsTechnicalInspection?.plate ??
+        doc.vehicleAsInsurance?.plate ??
+        doc.vehicleAsPropertyCard?.plate;
+
+      if (!vehiclePlate) {
+        removed += await this.clearVehicleDocumentAlerts(doc.id);
+        continue;
+      }
+
+      const daysRemaining = this.calculateDaysRemaining(today, doc.expiryDate);
+      const alertType = this.resolveAlertType(daysRemaining, daysAhead);
+
+      if (!alertType) {
+        removed += await this.clearVehicleDocumentAlerts(doc.id);
+        continue;
+      }
+
+      const result = await this.upsertVehicleDocumentAlert({
+        alertType,
+        vehicleDocumentId: doc.id,
+        vehiclePlate,
+        documentExpiryDate: doc.expiryDate,
+        daysRemaining,
+        message: this.buildDocumentAlertMessage("vehicle", doc.documentType, daysRemaining),
+      });
+
+      if (result.created) created += 1;
+      if (result.updated) updated += 1;
+    }
+
+    return {
+      created,
+      updated,
+      removed,
+    };
   }
 
   private buildAlertWhere(filters: AlertQueryDto): Prisma.DocumentAlertWhereInput {
