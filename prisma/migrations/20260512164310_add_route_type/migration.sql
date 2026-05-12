@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "ROUTE" ADD COLUMN     "route_type" VARCHAR(20) NOT NULL DEFAULT 'PICKUP';

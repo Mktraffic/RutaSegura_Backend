@@ -111,27 +111,30 @@ export class RoutesService {
       const route = await tx.route.create({
         data: {
           name: dto.name.trim(),
+          routeType: dto.routeType,
           zoneId: dto.zoneId,
           destinationId: dto.destinationId,
           originDescription: dto.originDescription,
           startTime: this.parseTime(dto.startTime),
-          endTime: this.parseTime(dto.endTime),
+          endTime: dto.endTime ? this.parseTime(dto.endTime) : undefined,
           status: "ACTIVE",
-          vehiclePlate: dto.vehiclePlate?.trim().toUpperCase(),
+          vehiclePlate: dto.vehiclePlate.trim().toUpperCase(),
           driverPersonId: dto.driverPersonId,
         },
       });
 
-      await tx.stop.createMany({
-        data: dto.stops.map((stop) => ({
-          routeId: route.id,
-          stopOrder: stop.stopOrder,
-          description: stop.description,
-          latitude: new Prisma.Decimal(stop.latitude),
-          longitude: new Prisma.Decimal(stop.longitude),
-          estimatedTime: this.parseTime(stop.estimatedTime),
-        })),
-      });
+      if (dto.stops?.length) {
+        await tx.stop.createMany({
+          data: dto.stops.map((stop) => ({
+            routeId: route.id,
+            stopOrder: stop.stopOrder,
+            description: stop.description,
+            latitude: new Prisma.Decimal(stop.latitude),
+            longitude: new Prisma.Decimal(stop.longitude),
+            estimatedTime: this.parseTime(stop.estimatedTime),
+          })),
+        });
+      }
 
       return this.findOneInternal(tx, route.id);
     });
@@ -182,6 +185,7 @@ export class RoutesService {
     return this.prisma.$transaction(async (tx) => {
       const updateData: Prisma.RouteUpdateInput = {
         name: dto.name?.trim(),
+        routeType: dto.routeType,
         originDescription: dto.originDescription,
         startTime: dto.startTime ? this.parseTime(dto.startTime) : undefined,
         endTime: dto.endTime ? this.parseTime(dto.endTime) : undefined,
@@ -260,30 +264,26 @@ export class RoutesService {
       });
     }
 
-    await this.validateAssignment(route, dto.personId, dto.stopId, dto.personAddressId);
-    const { startDate, endDate } = this.resolveAssignmentDates(
-      dto.startDate,
-      dto.endDate,
-    );
+    await this.validateAssignment(route, dto.personId, dto.personAddressId);
 
     const existingAssignment = await this.prisma.routeAssignment.findFirst({
       where: {
-        routeId,
         personId: dto.personId,
         status: "ACTIVE",
-        OR: [
-          { endDate: null },
-          { endDate: { gte: new Date() } },
-        ],
       },
-      select: { id: true },
+      select: { id: true, routeId: true },
     });
 
     if (existingAssignment) {
+      const conflictMessage =
+        existingAssignment.routeId === routeId
+          ? "El estudiante ya tiene una asignacion activa en esta ruta"
+          : "El estudiante ya tiene una asignacion activa en otra ruta";
+
       throw new BadRequestException({
         success: false,
         message: "No se pudo asignar el estudiante",
-        errors: ["El estudiante ya tiene una asignacion activa en esta ruta"],
+        errors: [conflictMessage],
       });
     }
 
@@ -291,10 +291,7 @@ export class RoutesService {
       data: {
         routeId,
         personId: dto.personId,
-        stopId: dto.stopId,
         personAddressId: dto.personAddressId,
-        startDate,
-        endDate,
         status: "ACTIVE",
       },
       include: this.assignmentInclude,
@@ -306,38 +303,11 @@ export class RoutesService {
     assignmentId: number,
     dto: UpdateRouteAssignmentDto,
   ) {
-    const assignment = await this.ensureAssignmentExists(routeId, assignmentId);
-    const route = await this.ensureRouteExists(routeId);
-
-    if (dto.stopId || dto.personAddressId) {
-      await this.validateAssignment(
-        route,
-        assignment.personId,
-        dto.stopId ?? assignment.stopId,
-        dto.personAddressId ?? assignment.personAddressId,
-      );
-    }
-
-    const { startDate, endDate } = this.resolveAssignmentDates(
-      dto.startDate ?? undefined,
-      dto.endDate ?? undefined,
-    );
-
-    if (startDate && endDate && startDate > endDate) {
-      throw new BadRequestException({
-        success: false,
-        message: "No se pudo actualizar la asignacion",
-        errors: ["La fecha de inicio no puede ser mayor a la fecha fin"],
-      });
-    }
+    await this.ensureAssignmentExists(routeId, assignmentId);
 
     return this.prisma.routeAssignment.update({
       where: { id: assignmentId },
       data: {
-        stopId: dto.stopId,
-        personAddressId: dto.personAddressId,
-        startDate: startDate ?? undefined,
-        endDate: endDate ?? undefined,
         status: dto.status,
       },
       include: this.assignmentInclude,
@@ -359,7 +329,6 @@ export class RoutesService {
       where: { id: assignmentId },
       data: {
         status: "INACTIVE",
-        endDate: new Date(),
       },
       include: this.assignmentInclude,
     });
@@ -377,62 +346,60 @@ export class RoutesService {
       errors.push("Ya existe una ruta con ese nombre");
     }
 
-    if (dto.zoneId) {
-      const zone = await this.prisma.zone.findUnique({
-        where: { id: dto.zoneId },
-        select: { id: true },
-      });
-
-      if (!zone) {
-        errors.push("La zona indicada no existe");
-      }
+    if (!this.isValidRouteType(dto.routeType)) {
+      errors.push("El tipo de ruta no es valido");
     }
 
-    if (dto.destinationId) {
-      const destination = await this.prisma.headquarters.findUnique({
-        where: { id: dto.destinationId },
-        select: { id: true },
-      });
+    const zone = await this.prisma.zone.findUnique({
+      where: { id: dto.zoneId },
+      select: { id: true },
+    });
 
-      if (!destination) {
-        errors.push("La sede indicada no existe");
-      }
+    if (!zone) {
+      errors.push("La zona indicada no existe");
     }
 
-    if (dto.vehiclePlate) {
-      const vehicle = await this.prisma.vehicle.findUnique({
-        where: { plate: dto.vehiclePlate.trim().toUpperCase() },
-        select: { plate: true, status: true },
-      });
+    const destination = await this.prisma.headquarters.findUnique({
+      where: { id: dto.destinationId },
+      select: { id: true },
+    });
 
-      if (!vehicle) {
-        errors.push("El vehiculo indicado no existe");
-      } else if (vehicle.status?.toUpperCase() !== "ACTIVE") {
-        errors.push("El vehiculo indicado no esta activo");
-      }
+    if (!destination) {
+      errors.push("La sede indicada no existe");
     }
 
-    if (dto.driverPersonId) {
-      const driver = await this.prisma.person.findUnique({
-        where: { id: dto.driverPersonId },
-        select: { id: true, personType: true, status: true },
-      });
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { plate: dto.vehiclePlate.trim().toUpperCase() },
+      select: { plate: true, status: true },
+    });
 
-      if (!driver || driver.personType !== "DRIVER") {
-        errors.push("El conductor indicado no existe");
-      } else if (driver.status?.toUpperCase() !== "ACTIVE") {
-        errors.push("El conductor indicado no esta activo");
-      }
+    if (!vehicle) {
+      errors.push("El vehiculo indicado no existe");
+    } else if (vehicle.status?.toUpperCase() !== "ACTIVE") {
+      errors.push("El vehiculo indicado no esta activo");
     }
 
-    this.ensureValidStops(dto.stops, errors);
+    const driver = await this.prisma.person.findUnique({
+      where: { id: dto.driverPersonId },
+      select: { id: true, personType: true, status: true },
+    });
 
-    if (dto.startTime && dto.endTime) {
+    if (!driver || driver.personType !== "DRIVER") {
+      errors.push("El conductor indicado no existe");
+    } else if (driver.status?.toUpperCase() !== "ACTIVE") {
+      errors.push("El conductor indicado no esta activo");
+    }
+
+    if (dto.endTime) {
       const startTime = this.parseTime(dto.startTime);
       const endTime = this.parseTime(dto.endTime);
       if (startTime >= endTime) {
         errors.push("La hora de inicio debe ser menor que la hora de fin");
       }
+    }
+
+    if (dto.stops?.length) {
+      this.ensureValidStops(dto.stops, errors);
     }
 
     if (errors.length) {
@@ -447,7 +414,7 @@ export class RoutesService {
   private async validateUpdateBusinessRules(
     id: number,
     dto: UpdateRouteDto,
-    current: { status: string | null; startTime: Date; endTime: Date },
+    current: { status: string | null; startTime: Date; endTime: Date | null },
   ) {
     const errors: string[] = [];
 
@@ -463,6 +430,10 @@ export class RoutesService {
       if (existingRoute) {
         errors.push("Ya existe una ruta con ese nombre");
       }
+    }
+
+    if (dto.routeType && !this.isValidRouteType(dto.routeType)) {
+      errors.push("El tipo de ruta no es valido");
     }
 
     if (dto.zoneId) {
@@ -514,14 +485,6 @@ export class RoutesService {
     }
 
     if (dto.stops) {
-      const assignmentCount = await this.prisma.routeAssignment.count({
-        where: { routeId: id },
-      });
-
-      if (assignmentCount > 0) {
-        errors.push("No puedes actualizar paradas con asignaciones registradas");
-      }
-
       this.ensureValidStops(dto.stops, errors);
     }
 
@@ -529,8 +492,11 @@ export class RoutesService {
       const startTime = dto.startTime
         ? this.parseTime(dto.startTime)
         : current.startTime;
-      const endTime = dto.endTime ? this.parseTime(dto.endTime) : current.endTime;
-      if (startTime >= endTime) {
+      const endTime = dto.endTime
+        ? this.parseTime(dto.endTime)
+        : current.endTime;
+
+      if (endTime && startTime >= endTime) {
         errors.push("La hora de inicio debe ser menor que la hora de fin");
       }
     }
@@ -564,7 +530,6 @@ export class RoutesService {
   private async validateAssignment(
     route: { id: number; zoneId: number | null },
     personId: number,
-    stopId: number,
     personAddressId: number,
   ) {
     const errors: string[] = [];
@@ -578,15 +543,6 @@ export class RoutesService {
       errors.push("El estudiante indicado no existe");
     } else if (student.status?.toUpperCase() !== "ACTIVE") {
       errors.push("El estudiante indicado no esta activo");
-    }
-
-    const stop = await this.prisma.stop.findFirst({
-      where: { id: stopId, routeId: route.id },
-      select: { id: true },
-    });
-
-    if (!stop) {
-      errors.push("La parada indicada no pertenece a la ruta");
     }
 
     const personAddress = await this.prisma.personAddress.findFirst({
@@ -616,28 +572,13 @@ export class RoutesService {
     }
   }
 
-  private resolveAssignmentDates(startDate?: string, endDate?: string) {
-    const start = startDate ? this.parseDate(startDate) : undefined;
-    const end = endDate ? this.parseDate(endDate) : undefined;
-
-    if (start && end && start > end) {
-      throw new BadRequestException({
-        success: false,
-        message: "No se pudo asignar el estudiante",
-        errors: ["La fecha de inicio no puede ser mayor a la fecha fin"],
-      });
-    }
-
-    return { startDate: start, endDate: end };
-  }
-
   private parseTime(value: string) {
     const [hour, minute] = value.split(":").map((item) => Number(item));
     return new Date(Date.UTC(1970, 0, 1, hour, minute, 0, 0));
   }
 
-  private parseDate(value: string) {
-    return new Date(`${value}T00:00:00.000Z`);
+  private isValidRouteType(value: string) {
+    return value === "PICKUP" || value === "DROPOFF";
   }
 
   private async ensureRouteExists(id: number) {

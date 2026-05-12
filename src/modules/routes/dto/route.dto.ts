@@ -1,10 +1,10 @@
 import {
   ArrayMinSize,
   IsArray,
-  IsDateString,
   IsInt,
   IsOptional,
   IsString,
+  IsIn,
   Matches,
   MaxLength,
   Min,
@@ -45,17 +45,19 @@ export class CreateRouteDto {
   @MaxLength(100)
   name!: string;
 
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  zoneId?: number;
+  @IsString()
+  @IsIn(["PICKUP", "DROPOFF"])
+  routeType!: "PICKUP" | "DROPOFF";
 
-  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  destinationId?: number;
+  zoneId!: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  destinationId!: number;
 
   @IsOptional()
   @IsString()
@@ -67,25 +69,25 @@ export class CreateRouteDto {
   startTime!: string;
 
   @IsString()
-  @Matches(timeFormat)
-  endTime!: string;
+  @MaxLength(20)
+  vehiclePlate!: string;
 
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  driverPersonId!: number;
+
+  @IsOptional()
+  @IsString()
+  @Matches(timeFormat)
+  endTime?: string;
+
+  @IsOptional()
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => RouteStopDto)
-  stops!: RouteStopDto[];
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  vehiclePlate?: string;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  driverPersonId?: number;
+  stops?: RouteStopDto[];
 }
 
 export class UpdateRouteDto {
@@ -94,6 +96,11 @@ export class UpdateRouteDto {
   @MinLength(3)
   @MaxLength(100)
   name?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["PICKUP", "DROPOFF"])
+  routeType?: "PICKUP" | "DROPOFF";
 
   @IsOptional()
   @Type(() => Number)
@@ -155,43 +162,10 @@ export class CreateRouteAssignmentDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  stopId!: number;
-
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
   personAddressId!: number;
-
-  @IsOptional()
-  @IsDateString()
-  startDate?: string;
-
-  @IsOptional()
-  @IsDateString()
-  endDate?: string;
 }
 
 export class UpdateRouteAssignmentDto {
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  stopId?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  personAddressId?: number;
-
-  @IsOptional()
-  @IsDateString()
-  startDate?: string;
-
-  @IsOptional()
-  @IsDateString()
-  endDate?: string;
-
   @IsOptional()
   @IsString()
   @MaxLength(20)
