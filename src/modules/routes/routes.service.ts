@@ -136,6 +136,10 @@ export class RoutesService {
         });
       }
 
+      if (dto.assignments?.length) {
+        await this.createAssignmentsForRoute(tx, route, dto.assignments);
+      }
+
       return this.findOneInternal(tx, route.id);
     });
   }
@@ -296,6 +300,50 @@ export class RoutesService {
       },
       include: this.assignmentInclude,
     });
+  }
+
+  private async createAssignmentsForRoute(
+    tx: Prisma.TransactionClient,
+    route: { id: number; zoneId: number | null },
+    assignments: Array<{ personId: number; personAddressId: number }>,
+  ) {
+    for (const assignment of assignments) {
+      await this.validateAssignment(
+        route,
+        assignment.personId,
+        assignment.personAddressId,
+      );
+
+      const existingAssignment = await this.prisma.routeAssignment.findFirst({
+        where: {
+          personId: assignment.personId,
+          status: "ACTIVE",
+        },
+        select: { id: true, routeId: true },
+      });
+
+      if (existingAssignment) {
+        const conflictMessage =
+          existingAssignment.routeId === route.id
+            ? "El estudiante ya tiene una asignacion activa en esta ruta"
+            : "El estudiante ya tiene una asignacion activa en otra ruta";
+
+        throw new BadRequestException({
+          success: false,
+          message: "No se pudo asignar el estudiante",
+          errors: [conflictMessage],
+        });
+      }
+
+      await tx.routeAssignment.create({
+        data: {
+          routeId: route.id,
+          personId: assignment.personId,
+          personAddressId: assignment.personAddressId,
+          status: "ACTIVE",
+        },
+      });
+    }
   }
 
   async updateAssignment(
