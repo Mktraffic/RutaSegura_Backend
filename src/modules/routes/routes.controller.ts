@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -12,6 +13,7 @@ import {
 } from "@nestjs/common";
 import { Roles } from "../../common/decorators/roles.decorator";
 import {
+  CalculateRouteDto,
   CreateRouteAssignmentDto,
   CreateRouteDto,
   UpdateRouteAssignmentDto,
@@ -142,5 +144,45 @@ export class RoutesController {
       message: "Asignacion inactivada correctamente",
       data: assignment,
     };
+  }
+
+  @Post(":id/calculate")
+  async calculateRoute(
+    @Param("id") id: string,
+    @Body() dto: CalculateRouteDto,
+  ) {
+    const route = await this.routesService.calculateRoute(Number(id), dto);
+    return {
+      success: true,
+      message: "Ruta calculada correctamente",
+      data: route,
+    };
+  }
+
+  @Get(":id/geojson")
+  async getRouteGeoJson(@Param("id") id: string) {
+    const data = await this.routesService.getRouteGeoJson(Number(id));
+    return {
+      success: true,
+      message: "Geometria de la ruta",
+      data,
+    };
+  }
+
+  @Get(":id/google-maps")
+  async getRouteGoogleMapsUrl(@Param("id") id: string) {
+    const url = await this.routesService.getRouteGoogleMapsUrl(Number(id));
+    return {
+      success: true,
+      message: "URL de Google Maps",
+      data: { url },
+    };
+  }
+
+  @Get(":id/gpx")
+  @Header("Content-Type", "application/gpx+xml")
+  @Header("Content-Disposition", "attachment; filename=route.gpx")
+  async exportRouteGpx(@Param("id") id: string) {
+    return this.routesService.exportRouteGpx(Number(id));
   }
 }

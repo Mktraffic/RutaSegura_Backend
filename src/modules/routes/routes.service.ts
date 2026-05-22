@@ -6,6 +6,7 @@ import {
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import {
+  CalculateRouteDto,
   CreateRouteAssignmentDto,
   CreateRouteDto,
   UpdateRouteAssignmentDto,
@@ -300,6 +301,152 @@ export class RoutesService {
       },
       include: this.assignmentInclude,
     });
+  }
+
+  async calculateRoute(routeId: number, dto: CalculateRouteDto) {
+    await this.ensureRouteExists(routeId);
+    const apiKey = this.getOrsApiKey();
+
+    const coordinates = this.buildCoordinates(dto);
+    const response = await fetch(
+      "https://api.openrouteservice.org/v2/directions/driving-car/geojson",
+      {
+        method: "POST",
+        headers: {
+          Authorization: apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          coordinates,
+          instructions: false,
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo calcular la ruta",
+        errors: ["Error al consultar OpenRouteService", errorBody],
+      });
+    }
+
+    const data = await response.json();
+    const feature = data?.features?.[0];
+    const summary = feature?.properties?.summary;
+    const geometry = feature?.geometry;
+
+    if (!geometry || !summary) {
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo calcular la ruta",
+        errors: ["La respuesta de OpenRouteService es invalida"],
+      });
+    }
+
+    const route = await this.prisma.route.update({
+      where: { id: routeId },
+      data: {
+        routeGeometry: geometry,
+        routeDistance: summary.distance,
+        routeDuration: Math.round(summary.duration),
+        routeWaypoints: this.buildWaypoints(dto),
+        routeCalculatedAt: new Date(),
+      },
+    });
+
+    return route;
+  }
+
+  async getRouteGeoJson(routeId: number) {
+    const route = await this.prisma.route.findUnique({
+      where: { id: routeId },
+      select: {
+        routeGeometry: true,
+        routeDistance: true,
+        routeDuration: true,
+      },
+    });
+
+    if (!route || !route.routeGeometry) {
+      throw new NotFoundException({
+        success: false,
+        message: "Ruta no calculada",
+      });
+    }
+
+    return {
+      type: "Feature",
+      geometry: route.routeGeometry,
+      properties: {
+        distance: route.routeDistance,
+        duration: route.routeDuration,
+      },
+    };
+  }
+
+  async getRouteGoogleMapsUrl(routeId: number) {
+    const route = await this.prisma.route.findUnique({
+      where: { id: routeId },
+      select: { routeWaypoints: true },
+    });
+
+    if (!route || !route.routeWaypoints) {
+      throw new NotFoundException({
+        success: false,
+        message: "Ruta no calculada",
+      });
+    }
+
+    const points = this.parseWaypoints(route.routeWaypoints);
+    if (points.length < 2) {
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo construir el enlace",
+        errors: ["No hay puntos suficientes para generar la URL"],
+      });
+    }
+
+    const origin = this.formatLatLng(points[0]);
+    const destination = this.formatLatLng(points[points.length - 1]);
+    const waypoints = points.slice(1, -1).map((point) => this.formatLatLng(point));
+
+    const url = new URL("https://www.google.com/maps/dir/");
+    url.searchParams.set("api", "1");
+    url.searchParams.set("origin", origin);
+    url.searchParams.set("destination", destination);
+    if (waypoints.length) {
+      url.searchParams.set("waypoints", waypoints.join("|"));
+    }
+
+    return url.toString();
+  }
+
+  async exportRouteGpx(routeId: number) {
+    const route = await this.prisma.route.findUnique({
+      where: { id: routeId },
+      select: {
+        routeGeometry: true,
+        routeWaypoints: true,
+      },
+    });
+
+    if (!route || !route.routeGeometry) {
+      throw new NotFoundException({
+        success: false,
+        message: "Ruta no calculada",
+      });
+    }
+
+    const geometry = route.routeGeometry as {
+      type: string;
+      coordinates: number[][];
+    };
+    const trackPoints = geometry.coordinates ?? [];
+    const waypoints = this.parseWaypoints(route.routeWaypoints);
+
+    return this.buildGpx(trackPoints, waypoints);
   }
 
   private async createAssignmentsForRoute(
@@ -623,6 +770,87 @@ export class RoutesService {
   private parseTime(value: string) {
     const [hour, minute] = value.split(":").map((item) => Number(item));
     return new Date(Date.UTC(1970, 0, 1, hour, minute, 0, 0));
+  }
+
+  private buildCoordinates(dto: CalculateRouteDto) {
+    const coordinates: number[][] = [
+      [dto.start.longitude, dto.start.latitude],
+      ...(dto.stops ?? []).map((stop) => [stop.longitude, stop.latitude]),
+      [dto.end.longitude, dto.end.latitude],
+    ];
+
+    return coordinates;
+  }
+
+  private buildWaypoints(dto: CalculateRouteDto) {
+    const points = [
+      { role: "start", latitude: dto.start.latitude, longitude: dto.start.longitude },
+      ...(dto.stops ?? []).map((stop) => ({
+        role: "stop",
+        latitude: stop.latitude,
+        longitude: stop.longitude,
+      })),
+      { role: "end", latitude: dto.end.latitude, longitude: dto.end.longitude },
+    ];
+
+    return points;
+  }
+
+  private parseWaypoints(value: unknown) {
+    if (!Array.isArray(value)) return [] as Array<{ latitude: number; longitude: number }>;
+
+    return value.filter((point) =>
+      typeof point === "object" &&
+      point !== null &&
+      "latitude" in point &&
+      "longitude" in point,
+    ) as Array<{ latitude: number; longitude: number }>;
+  }
+
+  private formatLatLng(point: { latitude: number; longitude: number }) {
+    return `${point.latitude},${point.longitude}`;
+  }
+
+  private buildGpx(
+    trackPoints: number[][],
+    waypoints: Array<{ latitude: number; longitude: number }>,
+  ) {
+    const header =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+      "<gpx version=\"1.1\" creator=\"RutaSegura\" xmlns=\"http://www.topografix.com/GPX/1/1\">";
+    const footer = "</gpx>";
+
+    const waypointXml = waypoints
+      .map(
+        (point, index) =>
+          `<wpt lat=\"${point.latitude}\" lon=\"${point.longitude}\"><name>Parada ${index + 1}</name></wpt>`,
+      )
+      .join("");
+
+    const trackXml =
+      "<trk><name>Ruta calculada</name><trkseg>" +
+      trackPoints
+        .map(
+          ([lng, lat]) =>
+            `<trkpt lat=\"${lat}\" lon=\"${lng}\"></trkpt>`,
+        )
+        .join("") +
+      "</trkseg></trk>";
+
+    return `${header}${waypointXml}${trackXml}${footer}`;
+  }
+
+  private getOrsApiKey() {
+    const key = process.env.ORS_API_KEY;
+    if (!key) {
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo calcular la ruta",
+        errors: ["No se encontro la API key de OpenRouteService"],
+      });
+    }
+
+    return key;
   }
 
   private isValidRouteType(value: string) {

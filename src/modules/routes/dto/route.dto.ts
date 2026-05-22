@@ -51,6 +51,16 @@ class CreateRouteAssignmentInputDto {
   personAddressId!: number;
 }
 
+class RoutePointDto {
+  @Type(() => Number)
+  @Min(-90)
+  latitude!: number;
+
+  @Type(() => Number)
+  @Min(-180)
+  longitude!: number;
+}
+
 export class CreateRouteDto {
   @IsString()
   @MinLength(3)
@@ -107,6 +117,22 @@ export class CreateRouteDto {
   @ValidateNested({ each: true })
   @Type(() => CreateRouteAssignmentInputDto)
   assignments?: CreateRouteAssignmentInputDto[];
+}
+
+export class CalculateRouteDto {
+  @ValidateNested()
+  @Type(() => RoutePointDto)
+  start!: RoutePointDto;
+
+  @ValidateNested()
+  @Type(() => RoutePointDto)
+  end!: RoutePointDto;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RoutePointDto)
+  stops?: RoutePointDto[];
 }
 
 export class UpdateRouteDto {
