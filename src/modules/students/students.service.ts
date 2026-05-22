@@ -81,6 +81,24 @@ export class StudentsService {
     });
   }
 
+  async findActiveByZone(zoneId: number) {
+    return this.prisma.person.findMany({
+      where: {
+        personType: "STUDENT",
+        status: "ACTIVE",
+        personAddresses: {
+          some: {
+            address: {
+              zoneId,
+            },
+          },
+        },
+      },
+      orderBy: { id: "desc" },
+      select: this.buildStudentSelectByZone(zoneId),
+    });
+  }
+
   async findOne(id: number) {
     const student = await this.prisma.person.findFirst({
       where: {
@@ -245,6 +263,74 @@ export class StudentsService {
       },
     },
   } satisfies Prisma.PersonSelect;
+
+  private buildStudentSelectByZone(zoneId: number) {
+    return {
+      id: true,
+      guardianId: true,
+      firstName: true,
+      middleName: true,
+      firstLastname: true,
+      secondLastname: true,
+      phone: true,
+      email: true,
+      status: true,
+      createdAt: true,
+      guardian: {
+        select: {
+          id: true,
+          firstName: true,
+          firstLastname: true,
+          email: true,
+          phone: true,
+        },
+      },
+      personAddresses: {
+        where: {
+          address: {
+            zoneId,
+          },
+        },
+        select: {
+          id: true,
+          address: {
+            select: {
+              id: true,
+              address: true,
+              latitude: true,
+              longitude: true,
+              status: true,
+              zone: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      personDocumentLinks: {
+        select: {
+          id: true,
+          documentRole: true,
+          personDocument: {
+            select: {
+              id: true,
+              documentType: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+              documentNumber: true,
+              status: true,
+            },
+          },
+        },
+      },
+    } satisfies Prisma.PersonSelect;
+  }
 
   private async syncAddresses(
     tx: Prisma.TransactionClient,

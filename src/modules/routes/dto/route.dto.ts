@@ -39,6 +39,18 @@ class RouteStopDto {
   estimatedTime!: string;
 }
 
+class CreateRouteAssignmentInputDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  personId!: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  personAddressId!: number;
+}
+
 export class CreateRouteDto {
   @IsString()
   @MinLength(3)
@@ -88,6 +100,13 @@ export class CreateRouteDto {
   @ValidateNested({ each: true })
   @Type(() => RouteStopDto)
   stops?: RouteStopDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => CreateRouteAssignmentInputDto)
+  assignments?: CreateRouteAssignmentInputDto[];
 }
 
 export class UpdateRouteDto {

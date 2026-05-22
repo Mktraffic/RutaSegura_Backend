@@ -40,6 +40,16 @@ export class StudentsController {
     };
   }
 
+  @Get("by-zone/:zoneId")
+  async findByZone(@Param("zoneId", ParseIntPipe) zoneId: number) {
+    const students = await this.studentsService.findActiveByZone(zoneId);
+    return {
+      success: true,
+      message: "Listado de estudiantes por zona",
+      data: students,
+    };
+  }
+
   @Get(":id")
   async findOne(@Param("id", ParseIntPipe) id: number) {
     const student = await this.studentsService.findOne(id);
