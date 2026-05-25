@@ -592,11 +592,29 @@ export class StudentsService {
       }
     }
 
-    if (dto.document) {
-      if (dto.document.documentNumber) {
-        errors.push(
-          "No puedes modificar el numero de documento desde la edicion de estudiante",
-        );
+    if (dto.document && dto.document.documentNumber) {
+      // Obtener el documento actual del estudiante
+      const existingLink = await this.prisma.personDocumentLink.findFirst({
+        where: { personId: studentId },
+        orderBy: { id: "asc" },
+        select: { personDocumentId: true },
+      });
+
+      if (existingLink) {
+        const currentDocument = await this.prisma.personDocument.findUnique({
+          where: { id: existingLink.personDocumentId },
+          select: { documentNumber: true },
+        });
+
+        // Solo rechazar si el documentNumber cambió
+        if (
+          currentDocument &&
+          currentDocument.documentNumber !== dto.document.documentNumber
+        ) {
+          errors.push(
+            "No puedes modificar el numero de documento desde la edicion de estudiante",
+          );
+        }
       }
     }
 
