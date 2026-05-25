@@ -13,7 +13,6 @@ import {
 } from "@nestjs/common";
 import { Roles } from "../../common/decorators/roles.decorator";
 import {
-  CalculateRouteDto,
   CreateRouteAssignmentDto,
   CreateRouteDto,
   UpdateRouteAssignmentDto,
@@ -55,6 +54,16 @@ export class RoutesController {
     };
   }
 
+  @Get("form-options")
+  async getFormOptions() {
+    const options = await this.routesService.getFormOptions();
+    return {
+      success: true,
+      message: "Opciones para el formulario de rutas",
+      data: options,
+    };
+  }
+
   @Get(":id")
   async findOne(@Param("id") id: string) {
     const route = await this.routesService.findOne(Number(id));
@@ -71,6 +80,16 @@ export class RoutesController {
     return {
       success: true,
       message: "Ruta actualizada correctamente",
+      data: route,
+    };
+  }
+
+  @Patch(":id/activate")
+  async activate(@Param("id") id: string) {
+    const route = await this.routesService.activate(Number(id));
+    return {
+      success: true,
+      message: "Ruta activada correctamente",
       data: route,
     };
   }
@@ -147,11 +166,8 @@ export class RoutesController {
   }
 
   @Post(":id/calculate")
-  async calculateRoute(
-    @Param("id") id: string,
-    @Body() dto: CalculateRouteDto,
-  ) {
-    const route = await this.routesService.calculateRoute(Number(id), dto);
+  async calculateRoute(@Param("id") id: string) {
+    const route = await this.routesService.calculateRoute(Number(id));
     return {
       success: true,
       message: "Ruta calculada correctamente",
