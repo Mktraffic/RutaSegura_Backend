@@ -287,11 +287,17 @@ model Vehicle {
 model Route {
   id                Int      @id @default(autoincrement())
   name              String   @db.VarChar(100)
+  routeType         String   @default("PICKUP") @map("route_type") @db.VarChar(20)
+  routeGeometry     Json?    @map("route_geometry")
+  routeDistance     Float?   @map("route_distance")
+  routeDuration     Int?     @map("route_duration")
+  routeWaypoints    Json?    @map("route_waypoints")
+  routeCalculatedAt DateTime? @map("route_calculated_at")
   zoneId            Int?     @map("zone_id")
   originDescription String?  @map("origin_description") @db.VarChar(200)
   destinationId     Int?     @map("destination_id")
   startTime         DateTime @map("start_time") @db.Time(6)
-  endTime           DateTime @map("end_time") @db.Time(6)
+  endTime           DateTime? @map("end_time") @db.Time(6)
   status            String?  @db.VarChar(20)
   vehiclePlate      String?  @map("vehicle_plate") @db.VarChar(20)
   driverPersonId    Int?     @map("driver_person_id")
@@ -334,8 +340,8 @@ model RouteAssignment {
   id              Int       @id @default(autoincrement())
   personId        Int       @map("person_id")
   routeId         Int       @map("route_id")
-  stopId          Int       @map("stop_id")
-  personAddressId Int       @map("person_address_id")
+  stopId          Int?      @map("stop_id")
+  personAddressId Int?      @map("person_address_id")
   startDate       DateTime? @map("start_date") @db.Date
   endDate         DateTime? @map("end_date") @db.Date
   status          String?   @db.VarChar(20)
@@ -343,8 +349,8 @@ model RouteAssignment {
 
   person        Person        @relation(fields: [personId], references: [id])
   route         Route         @relation(fields: [routeId], references: [id])
-  stop          Stop          @relation(fields: [stopId], references: [id])
-  personAddress PersonAddress @relation(fields: [personAddressId], references: [id])
+  stop          Stop?         @relation(fields: [stopId], references: [id])
+  personAddress PersonAddress? @relation(fields: [personAddressId], references: [id])
 
   routeAssignmentHeadquarters RouteAssignmentHeadquarters[]
 
