@@ -15,30 +15,6 @@ import { Type } from "class-transformer";
 
 const timeFormat = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-class RouteStopDto {
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  stopOrder!: number;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(150)
-  description?: string;
-
-  @Type(() => Number)
-  @Min(-90)
-  latitude!: number;
-
-  @Type(() => Number)
-  @Min(-180)
-  longitude!: number;
-
-  @IsString()
-  @Matches(timeFormat)
-  estimatedTime!: string;
-}
-
 class CreateRouteAssignmentInputDto {
   @Type(() => Number)
   @IsInt()
@@ -90,18 +66,6 @@ export class CreateRouteDto {
   driverPersonId!: number;
 
   @IsOptional()
-  @IsString()
-  @Matches(timeFormat)
-  endTime?: string;
-
-  @IsOptional()
-  @IsArray()
-  @ArrayMinSize(1)
-  @ValidateNested({ each: true })
-  @Type(() => RouteStopDto)
-  stops?: RouteStopDto[];
-
-  @IsOptional()
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
@@ -142,18 +106,6 @@ export class UpdateRouteDto {
   @IsString()
   @Matches(timeFormat)
   startTime?: string;
-
-  @IsOptional()
-  @IsString()
-  @Matches(timeFormat)
-  endTime?: string;
-
-  @IsOptional()
-  @IsArray()
-  @ArrayMinSize(1)
-  @ValidateNested({ each: true })
-  @Type(() => RouteStopDto)
-  stops?: RouteStopDto[];
 
   @IsOptional()
   @IsString()
