@@ -413,6 +413,9 @@ export class DocumentManagementService {
   }
 
   async findAlerts(filters: AlertQueryDto) {
+    const daysAhead = filters.daysAhead ?? 30;
+    await this.generateExpiryAlerts(daysAhead);
+
     const where = this.buildAlertWhere(filters);
     const page = filters.page ?? 1;
     const limit = filters.limit ?? 20;
