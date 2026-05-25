@@ -9,6 +9,31 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log('Seeding database...');
 
+  // Reset data to make the seed re-runnable in dev.
+  await prisma.documentAlert.deleteMany();
+  await prisma.routeAssignmentHeadquarters.deleteMany();
+  await prisma.routeAssignment.deleteMany();
+  await prisma.stop.deleteMany();
+  await prisma.checklistItem.deleteMany();
+  await prisma.checklist.deleteMany();
+  await prisma.trip.deleteMany();
+  await prisma.route.deleteMany();
+  await prisma.vehicleStatusHistory.deleteMany();
+  await prisma.personAddress.deleteMany();
+  await prisma.headquarters.deleteMany();
+  await prisma.address.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.personDocumentLink.deleteMany();
+  await prisma.person.deleteMany();
+  await prisma.guardian.deleteMany();
+  await prisma.vehicle.deleteMany();
+  await prisma.vehicleDocument.deleteMany();
+  await prisma.personDocument.deleteMany();
+  await prisma.documentType.deleteMany();
+  await prisma.role.deleteMany();
+  await prisma.zone.deleteMany();
+  await prisma.checklistTemplate.deleteMany();
+
   const personDocumentTypes = [
     'Licencia de conduccion',
     'Tarjeta de identidad',
@@ -378,6 +403,7 @@ async function main() {
   const routeNorth = await prisma.route.create({
     data: {
       name: 'Ruta Zona Norte — Mañana',
+      routeType: 'PICKUP',
       zoneId: zoneNorth.id,
       originDescription: 'Recorrido zona norte de Tunja',
       destinationId: hq1.id,
@@ -391,6 +417,7 @@ async function main() {
   const routeCenter = await prisma.route.create({
     data: {
       name: 'Ruta Zona Centro — Mañana',
+      routeType: 'PICKUP',
       zoneId: zoneCenter.id,
       originDescription: 'Recorrido zona centro de Tunja',
       destinationId: hq1.id,
@@ -466,7 +493,7 @@ async function main() {
   const assignment4 = await prisma.routeAssignment.create({
     data: { personId: student3.id, routeId: routeCenter.id,
       stopId: stopCenter1.id, personAddressId: personAddr3Center.id,
-      startDate: new Date('2025-01-20'), status: 'ACTIVE' },
+      startDate: new Date('2025-01-20'), endDate: new Date('2025-02-20'), status: 'INACTIVE' },
   });
 
   // ─────────────────────────────────────────────
