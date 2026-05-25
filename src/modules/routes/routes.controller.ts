@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -53,6 +54,16 @@ export class RoutesController {
     };
   }
 
+  @Get("form-options")
+  async getFormOptions() {
+    const options = await this.routesService.getFormOptions();
+    return {
+      success: true,
+      message: "Opciones para el formulario de rutas",
+      data: options,
+    };
+  }
+
   @Get(":id")
   async findOne(@Param("id") id: string) {
     const route = await this.routesService.findOne(Number(id));
@@ -69,6 +80,16 @@ export class RoutesController {
     return {
       success: true,
       message: "Ruta actualizada correctamente",
+      data: route,
+    };
+  }
+
+  @Patch(":id/activate")
+  async activate(@Param("id") id: string) {
+    const route = await this.routesService.activate(Number(id));
+    return {
+      success: true,
+      message: "Ruta activada correctamente",
       data: route,
     };
   }
@@ -142,5 +163,42 @@ export class RoutesController {
       message: "Asignacion inactivada correctamente",
       data: assignment,
     };
+  }
+
+  @Post(":id/calculate")
+  async calculateRoute(@Param("id") id: string) {
+    const route = await this.routesService.calculateRoute(Number(id));
+    return {
+      success: true,
+      message: "Ruta calculada correctamente",
+      data: route,
+    };
+  }
+
+  @Get(":id/geojson")
+  async getRouteGeoJson(@Param("id") id: string) {
+    const data = await this.routesService.getRouteGeoJson(Number(id));
+    return {
+      success: true,
+      message: "Geometria de la ruta",
+      data,
+    };
+  }
+
+  @Get(":id/google-maps")
+  async getRouteGoogleMapsUrl(@Param("id") id: string) {
+    const url = await this.routesService.getRouteGoogleMapsUrl(Number(id));
+    return {
+      success: true,
+      message: "URL de Google Maps",
+      data: { url },
+    };
+  }
+
+  @Get(":id/gpx")
+  @Header("Content-Type", "application/gpx+xml")
+  @Header("Content-Disposition", "attachment; filename=route.gpx")
+  async exportRouteGpx(@Param("id") id: string) {
+    return this.routesService.exportRouteGpx(Number(id));
   }
 }
