@@ -133,26 +133,7 @@ describe('Route DTOs', () => {
       expect(errors.length).toBeGreaterThan(0);
     });
 
-    it('should accept optional endTime when provided in valid format', async () => {
-      const plainObject = {
-        name: 'Route A1',
-        routeType: 'PICKUP',
-        zoneId: 1,
-        destinationId: 2,
-        startTime: '07:00',
-        endTime: '12:00',
-        vehiclePlate: 'ABC-1234',
-        driverPersonId: 5,
-      };
-
-      const dto = plainToClass(CreateRouteDto, plainObject);
-      const errors = await validate(dto);
-
-      expect(errors.length).toBe(0);
-      expect(dto.endTime).toBe('12:00');
-    });
-
-    it('should accept optional stops with valid array structure', async () => {
+    it('should accept optional assignments when provided with valid structure', async () => {
       const plainObject = {
         name: 'Route A1',
         routeType: 'PICKUP',
@@ -161,18 +142,14 @@ describe('Route DTOs', () => {
         startTime: '07:00',
         vehiclePlate: 'ABC-1234',
         driverPersonId: 5,
-        stops: [
+        assignments: [
           {
-            stopOrder: 1,
-            latitude: 4.7110,
-            longitude: -74.0721,
-            estimatedTime: '07:15',
+            personId: 10,
+            personAddressId: 5,
           },
           {
-            stopOrder: 2,
-            latitude: 4.7200,
-            longitude: -74.0800,
-            estimatedTime: '07:30',
+            personId: 11,
+            personAddressId: 6,
           },
         ],
       };
@@ -181,10 +158,10 @@ describe('Route DTOs', () => {
       const errors = await validate(dto);
 
       expect(errors.length).toBe(0);
-      expect(dto.stops?.length).toBe(2);
+      expect(dto.assignments?.length).toBe(2);
     });
 
-    it('should fail validation when stops is empty array', async () => {
+    it('should fail validation when assignments is empty array', async () => {
       const plainObject = {
         name: 'Route A1',
         routeType: 'PICKUP',
@@ -193,7 +170,7 @@ describe('Route DTOs', () => {
         startTime: '07:00',
         vehiclePlate: 'ABC-1234',
         driverPersonId: 5,
-        stops: [],
+        assignments: [],
       };
 
       const dto = plainToClass(CreateRouteDto, plainObject);
@@ -280,7 +257,7 @@ describe('Route DTOs', () => {
       const plainObject = {
         name: 'Route Updated',
         startTime: '08:00',
-        endTime: '14:00',
+        routeType: 'DROPOFF',
         status: 'ACTIVE',
       };
 
