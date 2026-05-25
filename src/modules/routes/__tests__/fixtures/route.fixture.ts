@@ -1,5 +1,6 @@
 export const validCreateRouteDto = {
   name: 'Ruta Centro A',
+  routeType: 'PICKUP' as const,
   zoneId: 1,
   destinationId: 1,
   originDescription: 'Punto de salida centro',
@@ -33,6 +34,7 @@ export const updateRouteDto = {
 export const routeInDatabase = {
   id: 1,
   name: 'Ruta Centro A',
+  routeType: 'PICKUP' as const,
   zoneId: 1,
   destinationId: 1,
   originDescription: 'Punto de salida centro',
@@ -93,6 +95,7 @@ export const routeInDatabaseList = [
   {
     id: 2,
     name: 'Ruta Centro B',
+    routeType: 'DROPOFF' as const,
     zoneId: 1,
     status: 'ACTIVE',
     destinationId: 1,
@@ -134,12 +137,11 @@ export const routeInDatabaseList = [
 
 export const validCreateRouteAssignmentDto = {
   personId: 2,
-  stopId: 1,
   personAddressId: 1,
 };
 
 export const updateRouteAssignmentDto = {
-  stopId: 2,
+  status: 'INACTIVE',
 };
 
 export const routeAssignmentInDatabase = {

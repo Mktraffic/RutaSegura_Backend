@@ -215,6 +215,63 @@ describe('StudentsService', () => {
         service.update(1, validUpdateStudentDto),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('should handle document update in transaction', async () => {
+      const updateDto = {
+        firstName: 'Carlos',
+      };
+
+      jest
+        .spyOn(prismaService.person, 'findFirst')
+        .mockResolvedValueOnce(studentInDatabase);
+      jest.spyOn(prismaService, '$transaction').mockImplementation(async (callback) => {
+        const mockTx = {
+          person: {
+            update: jest.fn().mockResolvedValueOnce({}),
+          },
+          personDocumentLink: {
+            findFirst: jest.fn().mockResolvedValueOnce(null),
+          },
+          personAddressLink: {
+            findMany: jest.fn().mockResolvedValueOnce([]),
+            deleteMany: jest.fn().mockResolvedValueOnce({ count: 0 }),
+          },
+        };
+        return callback(mockTx as any);
+      });
+      jest.spyOn(service, 'findOneByIdInternal' as any).mockResolvedValueOnce(studentInDatabase);
+
+      const result = await service.update(1, updateDto as any);
+
+      expect(result).toBeDefined();
+    });
+
+    it('should throw BadRequestException when document link not found', async () => {
+      const updateDto = {
+        firstName: 'Juan',
+        document: {
+          documentType: 'Pasaporte',
+        },
+      };
+
+      jest
+        .spyOn(prismaService.person, 'findFirst')
+        .mockResolvedValueOnce(studentInDatabase);
+      jest.spyOn(prismaService, '$transaction').mockImplementation(async (callback) => {
+        return callback({
+          person: {
+            update: jest.fn().mockResolvedValueOnce({}),
+          },
+          personDocumentLink: {
+            findFirst: jest.fn().mockResolvedValueOnce(null),
+          },
+        } as any);
+      });
+
+      await expect(service.update(1, updateDto as any)).rejects.toThrow(
+        BadRequestException
+      );
+    });
   });
 
   describe('inactivate', () => {

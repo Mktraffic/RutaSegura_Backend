@@ -255,4 +255,164 @@ describe('GuardiansService', () => {
       expect(result.phone).toBe(validCreateGuardianDto.phone);
     });
   });
+
+  describe('findOne', () => {
+    it('should return a guardian by id', async () => {
+      const id = 1;
+      jest
+        .spyOn(prismaService.guardian, 'findUnique')
+        .mockResolvedValueOnce(guardianInDatabase as any);
+
+      const result = await service.findOne(id);
+
+      expect(result).toEqual(guardianInDatabase);
+      expect(prismaService.guardian.findUnique).toHaveBeenCalledWith({
+        where: { id },
+        select: expect.objectContaining({
+          id: true,
+          firstName: true,
+          email: true,
+        }),
+      });
+    });
+
+    it('should throw NotFoundException if guardian not found', async () => {
+      const id = 999;
+      jest.spyOn(prismaService.guardian, 'findUnique').mockResolvedValueOnce(null);
+
+      await expect(service.findOne(id)).rejects.toThrow('Acudiente no encontrado');
+    });
+  });
+
+  describe('update', () => {
+    it('should update a guardian successfully', async () => {
+      const id = 1;
+      const updateDto = {
+        firstName: 'Carlos',
+        firstLastname: 'Gómez',
+      };
+
+      const guardianExists = {
+        id: 1,
+        documentId: 1,
+        status: 'ACTIVE',
+      };
+
+      const updatedGuardian = {
+        ...guardianInDatabase,
+        ...updateDto,
+      };
+
+      jest
+        .spyOn(prismaService.guardian, 'findUnique')
+        .mockResolvedValueOnce(guardianExists as any);
+      jest.spyOn(prismaService, '$transaction').mockImplementation(async (callback) => {
+        return callback({
+          personDocument: {
+            update: jest.fn().mockResolvedValueOnce({}),
+          },
+          guardian: {
+            update: jest.fn().mockResolvedValueOnce(updatedGuardian),
+            findUnique: jest.fn().mockResolvedValueOnce(updatedGuardian),
+          },
+        } as any);
+      });
+
+      const result = await service.update(id, updateDto as any);
+
+      expect(result).toBeDefined();
+    });
+
+    it('should throw NotFoundException if guardian not found', async () => {
+      const id = 999;
+      jest.spyOn(prismaService.guardian, 'findUnique').mockResolvedValueOnce(null);
+
+      await expect(
+        service.update(id, { firstName: 'Test' } as any)
+      ).rejects.toThrow('Acudiente no encontrado');
+    });
+
+    it('should throw BadRequestException if trying to update document number', async () => {
+      const id = 1;
+      const guardianExists = {
+        id: 1,
+        documentId: 1,
+        status: 'ACTIVE',
+      };
+
+      const updateDto = {
+        document: {
+          documentNumber: '12345678',
+        },
+      };
+
+      jest
+        .spyOn(prismaService.guardian, 'findUnique')
+        .mockResolvedValueOnce(guardianExists as any);
+
+      await expect(service.update(id, updateDto as any)).rejects.toThrow(
+        BadRequestException
+      );
+    });
+  });
+
+  describe('inactivate', () => {
+    it('should inactivate a guardian successfully', async () => {
+      const id = 1;
+      const guardianExists = {
+        id: 1,
+        documentId: 1,
+        status: 'ACTIVE',
+      };
+
+      const inactivatedGuardian = {
+        ...guardianInDatabase,
+        status: 'INACTIVE',
+      };
+
+      jest
+        .spyOn(prismaService.guardian, 'findUnique')
+        .mockResolvedValueOnce(guardianExists as any)
+        .mockResolvedValueOnce(inactivatedGuardian as any);
+      jest
+        .spyOn(prismaService.guardian, 'update')
+        .mockResolvedValueOnce(inactivatedGuardian as any);
+
+      const result = await service.inactivate(id);
+
+      expect(result.status).toBe('INACTIVE');
+      expect(prismaService.guardian.update).toHaveBeenCalledWith({
+        where: { id },
+        data: { status: 'INACTIVE' },
+        select: expect.objectContaining({
+          id: true,
+          firstName: true,
+        }),
+      });
+    });
+
+    it('should throw BadRequestException if guardian is already inactive', async () => {
+      const id = 1;
+      const inactiveGuardian = {
+        id: 1,
+        documentId: 1,
+        status: 'INACTIVE',
+      };
+
+      jest
+        .spyOn(prismaService.guardian, 'findUnique')
+        .mockResolvedValueOnce(inactiveGuardian as any);
+
+      await expect(service.inactivate(id)).rejects.toThrow(
+        BadRequestException
+      );
+    });
+
+    it('should throw NotFoundException if guardian not found', async () => {
+      const id = 999;
+      jest.spyOn(prismaService.guardian, 'findUnique').mockResolvedValueOnce(null);
+
+      await expect(service.inactivate(id)).rejects.toThrow('Acudiente no encontrado');
+    });
+  });
 });
