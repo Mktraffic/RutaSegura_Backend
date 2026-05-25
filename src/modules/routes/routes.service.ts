@@ -975,8 +975,10 @@ export class RoutesService {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          // instructions debe ir en true para que ORS incluya el arreglo
+          // "segments" (duracion/distancia por tramo) que usamos para las ETAs.
           coordinates,
-          instructions: false,
+          instructions: true,
         }),
       },
     );
@@ -1008,10 +1010,13 @@ export class RoutesService {
     const geometry = feature?.geometry;
 
     if (!geometry || !summary || !Array.isArray(segments)) {
+      // Si ORS devuelve 200 pero sin la estructura esperada (p. ej. un cuerpo
+      // de error o de cuota), incluimos un fragmento para poder diagnosticarlo.
+      const snippet = JSON.stringify(data ?? {}).slice(0, 300);
       throw new BadRequestException({
         success: false,
         message: "No se pudo calcular la ruta",
-        errors: ["La respuesta de OpenRouteService es invalida"],
+        errors: ["La respuesta de OpenRouteService es invalida", snippet],
       });
     }
 
