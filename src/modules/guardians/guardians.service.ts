@@ -86,7 +86,7 @@ export class GuardiansService {
   async update(id: number, dto: UpdateGuardianDto) {
     const guardian = await this.ensureGuardianExists(id);
 
-    await this.validateUpdateBusinessRules(dto);
+    await this.validateUpdateBusinessRules(id, dto);
 
     return this.prisma.$transaction(async (tx) => {
       if (dto.document) {
@@ -232,7 +232,7 @@ export class GuardiansService {
     return guardian;
   }
 
-  private async validateUpdateBusinessRules(dto: UpdateGuardianDto) {
+  private async validateUpdateBusinessRules(id: number, dto: UpdateGuardianDto) {
     const errors: string[] = [];
 
     if (dto.document) {
@@ -240,9 +240,28 @@ export class GuardiansService {
       const hasDocumentNumber = !!dto.document.documentNumber;
 
       if (hasDocumentNumber) {
-        errors.push(
-          "No puedes modificar el numero de documento desde la edicion de acudiente",
-        );
+        // Obtener el documento actual del acudiente
+        const guardian = await this.prisma.guardian.findUnique({
+          where: { id },
+          select: { documentId: true },
+        });
+
+        if (guardian) {
+          const currentDocument = await this.prisma.personDocument.findUnique({
+            where: { id: guardian.documentId },
+            select: { documentNumber: true },
+          });
+
+          // Solo rechazar si el documentNumber cambió
+          if (
+            currentDocument &&
+            currentDocument.documentNumber !== dto.document.documentNumber
+          ) {
+            errors.push(
+              "No puedes modificar el numero de documento desde la edicion de acudiente",
+            );
+          }
+        }
       }
 
       if (hasDocumentType) {
