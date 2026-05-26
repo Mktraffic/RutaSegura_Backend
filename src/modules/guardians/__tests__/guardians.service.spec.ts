@@ -346,9 +346,17 @@ describe('GuardiansService', () => {
         },
       };
 
+      // First call for ensureGuardianExists, second for validateUpdateBusinessRules
       jest
         .spyOn(prismaService.guardian, 'findUnique')
+        .mockResolvedValueOnce(guardianExists as any)
         .mockResolvedValueOnce(guardianExists as any);
+
+      jest
+        .spyOn(prismaService.personDocument, 'findUnique')
+        .mockResolvedValueOnce({
+          documentNumber: '87654321',
+        } as any);
 
       await expect(service.update(id, updateDto as any)).rejects.toThrow(
         BadRequestException
