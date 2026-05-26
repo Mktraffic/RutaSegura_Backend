@@ -290,16 +290,34 @@ export class DriversService {
       }
     }
 
-    if (dto.document) {
-      if (dto.document.documentNumber) {
-        errors.push(
-          "No puedes modificar el numero de documento desde la edicion de conductor",
-        );
-      }
+    if (dto.document && dto.document.documentNumber) {
+      // Obtener el documento actual del conductor
+      const existingLink = await this.prisma.personDocumentLink.findFirst({
+        where: { personId: id },
+        orderBy: { id: "asc" },
+        select: { personDocumentId: true },
+      });
 
-      if (dto.document.documentType) {
-        await this.resolveDocumentTypeId(dto.document.documentType);
+      if (existingLink) {
+        const currentDocument = await this.prisma.personDocument.findUnique({
+          where: { id: existingLink.personDocumentId },
+          select: { documentNumber: true },
+        });
+
+        // Solo rechazar si el documentNumber cambió
+        if (
+          currentDocument &&
+          currentDocument.documentNumber !== dto.document.documentNumber
+        ) {
+          errors.push(
+            "No puedes modificar el numero de documento desde la edicion de conductor",
+          );
+        }
       }
+    }
+
+    if (dto.document && dto.document.documentType) {
+      await this.resolveDocumentTypeId(dto.document.documentType);
     }
 
     if (errors.length) {
