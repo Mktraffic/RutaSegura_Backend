@@ -1,4 +1,6 @@
 import {
+  ArrayMinSize,
+  IsArray,
   IsEmail,
   IsOptional,
   IsString,
@@ -85,9 +87,11 @@ export class CreateDriverDto {
   @MaxLength(100)
   email?: string;
 
-  @ValidateNested()
+  @IsArray()
+  @ArrayMinSize(2)
+  @ValidateNested({ each: true })
   @Type(() => DriverDocumentDto)
-  document!: DriverDocumentDto;
+  documents!: DriverDocumentDto[];
 }
 
 export class UpdateDriverDto {
@@ -124,9 +128,11 @@ export class UpdateDriverDto {
   email?: string;
 
   @IsOptional()
-  @ValidateNested()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
   @Type(() => UpdateDriverDocumentDto)
-  document?: UpdateDriverDocumentDto;
+  documents?: UpdateDriverDocumentDto[];
 
   @IsOptional()
   @IsString()

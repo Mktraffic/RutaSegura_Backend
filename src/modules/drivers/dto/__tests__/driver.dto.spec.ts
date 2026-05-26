@@ -8,10 +8,16 @@ describe('CreateDriverDto', () => {
     const plainObject = {
       firstName: 'Juan',
       firstLastname: 'Pérez',
-      document: {
-        documentType: 'ID_CARD',
-        documentNumber: 'ID123456789',
-      },
+      documents: [
+        {
+          documentType: 'CC',
+          documentNumber: 'ID123456789',
+        },
+        {
+          documentType: 'LICENCIA',
+          documentNumber: 'LIC123456',
+        },
+      ],
     };
 
     const dto = plainToClass(CreateDriverDto, plainObject);
@@ -23,10 +29,16 @@ describe('CreateDriverDto', () => {
   it('should fail validation when firstName is missing', async () => {
     const plainObject = {
       firstLastname: 'Pérez',
-      document: {
-        documentType: 'ID_CARD',
-        documentNumber: 'ID123456789',
-      },
+      documents: [
+        {
+          documentType: 'CC',
+          documentNumber: 'ID123456789',
+        },
+        {
+          documentType: 'LICENCIA',
+          documentNumber: 'LIC123456',
+        },
+      ],
     };
 
     const dto = plainToClass(CreateDriverDto, plainObject);
@@ -38,10 +50,16 @@ describe('CreateDriverDto', () => {
   it('should fail validation when firstLastname is missing', async () => {
     const plainObject = {
       firstName: 'Juan',
-      document: {
-        documentType: 'ID_CARD',
-        documentNumber: 'ID123456789',
-      },
+      documents: [
+        {
+          documentType: 'CC',
+          documentNumber: 'ID123456789',
+        },
+        {
+          documentType: 'LICENCIA',
+          documentNumber: 'LIC123456',
+        },
+      ],
     };
 
     const dto = plainToClass(CreateDriverDto, plainObject);
@@ -50,7 +68,7 @@ describe('CreateDriverDto', () => {
     expect(errors.length).toBeGreaterThan(0);
   });
 
-  it('should still validate when document is missing (nested validation may be lenient)', async () => {
+  it('should fail validation when documents are missing', async () => {
     const plainObject = {
       firstName: 'Juan',
       firstLastname: 'Pérez',
@@ -59,9 +77,7 @@ describe('CreateDriverDto', () => {
     const dto = plainToClass(CreateDriverDto, plainObject);
     const errors = await validate(dto);
 
-    // ValidateNested might not fail if the object is undefined, depending on class-validator config
-    // This test documents the actual behavior
-    expect(errors).toBeDefined();
+    expect(errors.length).toBeGreaterThan(0);
   });
 
   it('should accept optional fields', async () => {
@@ -72,12 +88,20 @@ describe('CreateDriverDto', () => {
       secondLastname: 'López',
       phone: '+57123456789',
       email: 'juan@example.com',
-      document: {
-        documentType: 'PASSPORT',
-        documentNumber: 'PASS123456',
-        description: 'Valid passport',
-        documentRole: 'PRIMARY',
-      },
+      documents: [
+        {
+          documentType: 'CC',
+          documentNumber: 'PASS123456',
+          description: 'Cedula valida',
+          documentRole: 'PRIMARY',
+        },
+        {
+          documentType: 'LICENCIA',
+          documentNumber: 'LIC999',
+          description: 'Licencia valida',
+          documentRole: 'PRIMARY',
+        },
+      ],
     };
 
     const dto = plainToClass(CreateDriverDto, plainObject);
@@ -91,10 +115,16 @@ describe('CreateDriverDto', () => {
       firstName: 'Juan',
       firstLastname: 'Pérez',
       email: 'invalid-email',
-      document: {
-        documentType: 'ID_CARD',
-        documentNumber: 'ID123456789',
-      },
+      documents: [
+        {
+          documentType: 'CC',
+          documentNumber: 'ID123456789',
+        },
+        {
+          documentType: 'LICENCIA',
+          documentNumber: 'LIC123456',
+        },
+      ],
     };
 
     const dto = plainToClass(CreateDriverDto, plainObject);
@@ -107,10 +137,16 @@ describe('CreateDriverDto', () => {
     const plainObject = {
       firstName: 'Juan',
       firstLastname: 'Pérez',
-      document: {
-        documentType: 'X',
-        documentNumber: 'ID123456789',
-      },
+      documents: [
+        {
+          documentType: 'X',
+          documentNumber: 'ID123456789',
+        },
+        {
+          documentType: 'LICENCIA',
+          documentNumber: 'LIC123456',
+        },
+      ],
     };
 
     const dto = plainToClass(CreateDriverDto, plainObject);
@@ -123,10 +159,16 @@ describe('CreateDriverDto', () => {
     const plainObject = {
       firstName: 'a'.repeat(51),
       firstLastname: 'Pérez',
-      document: {
-        documentType: 'ID_CARD',
-        documentNumber: 'ID123456789',
-      },
+      documents: [
+        {
+          documentType: 'CC',
+          documentNumber: 'ID123456789',
+        },
+        {
+          documentType: 'LICENCIA',
+          documentNumber: 'LIC123456',
+        },
+      ],
     };
 
     const dto = plainToClass(CreateDriverDto, plainObject);
@@ -182,13 +224,19 @@ describe('UpdateDriverDto', () => {
     expect(errors.length).toBe(0);
   });
 
-  it('should accept optional document field for update', async () => {
+  it('should accept optional documents field for update', async () => {
     const plainObject = {
       firstName: 'Carlos',
-      document: {
-        documentType: 'PASSPORT',
-        documentNumber: 'NEW12345',
-      },
+      documents: [
+        {
+          documentType: 'CC',
+          documentNumber: 'NEW12345',
+        },
+        {
+          documentType: 'LICENCIA',
+          documentNumber: 'LIC999',
+        },
+      ],
     };
 
     const dto = plainToClass(UpdateDriverDto, plainObject);

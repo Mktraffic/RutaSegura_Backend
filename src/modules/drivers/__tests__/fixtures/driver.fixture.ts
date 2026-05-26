@@ -5,6 +5,13 @@ export const validDriverDocument = {
   documentRole: 'DRIVER_ID',
 };
 
+export const validDriverLicenseDocument = {
+  documentType: 'LICENCIA',
+  documentNumber: 'LIC-987654',
+  description: 'Licencia de conducción',
+  documentRole: 'DRIVER_LICENSE',
+};
+
 export const validCreateDriverDto = {
   firstName: 'Juan',
   middleName: 'Carlos',
@@ -12,7 +19,7 @@ export const validCreateDriverDto = {
   secondLastname: 'García',
   phone: '3001234567',
   email: 'juan.perez@example.com',
-  document: validDriverDocument,
+  documents: [validDriverDocument, validDriverLicenseDocument],
 };
 
 export const validCreateDriverDtoWithoutOptionals = {
@@ -20,10 +27,16 @@ export const validCreateDriverDtoWithoutOptionals = {
   firstLastname: 'López',
   email: 'maria.lopez@example.com',
   phone: '3009876543',
-  document: {
-    documentType: 'CC',
-    documentNumber: '9876543210',
-  },
+  documents: [
+    {
+      documentType: 'CC',
+      documentNumber: '9876543210',
+    },
+    {
+      documentType: 'LICENCIA',
+      documentNumber: 'LIC-123456',
+    },
+  ],
 };
 
 export const driverInDatabase = {
@@ -63,6 +76,20 @@ export const driverInDatabase = {
         },
       },
     },
+    {
+      id: 2,
+      documentRole: 'DRIVER_LICENSE',
+      personDocument: {
+        id: 2,
+        documentNumber: 'LIC-987654',
+        description: 'Licencia de conducción',
+        status: 'ACTIVE',
+        documentType: {
+          id: 2,
+          name: 'LICENCIA',
+        },
+      },
+    },
   ],
 };
 
@@ -94,6 +121,20 @@ export const driverInDatabaseList = [
           },
         },
       },
+      {
+        id: 2,
+        documentRole: 'DRIVER_LICENSE',
+        personDocument: {
+          id: 2,
+          documentNumber: 'LIC-987654',
+          description: 'Licencia de conducción',
+          status: 'ACTIVE',
+          documentType: {
+            id: 2,
+            name: 'LICENCIA',
+          },
+        },
+      },
     ],
   },
   {
@@ -119,6 +160,19 @@ export const driverInDatabaseList = [
           documentType: {
             id: 1,
             name: 'CC',
+          },
+        },
+      },
+      {
+        id: 3,
+        documentRole: 'DRIVER_LICENSE',
+        personDocument: {
+          id: 3,
+          documentNumber: 'LIC-123456',
+          status: 'ACTIVE',
+          documentType: {
+            id: 2,
+            name: 'LICENCIA',
           },
         },
       },

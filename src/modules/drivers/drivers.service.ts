@@ -7,6 +7,14 @@ import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateDriverDto, UpdateDriverDto } from "./dto/driver.dto";
 
+type DriverDocumentKind = "CC" | "LICENSE";
+type DriverDocumentInput = {
+  documentType: string;
+  documentNumber?: string;
+  description?: string;
+  documentRole?: string;
+};
+
 @Injectable()
 export class DriversService {
   constructor(private readonly prisma: PrismaService) {}
@@ -58,8 +66,7 @@ export class DriversService {
   } satisfies Prisma.PersonSelect;
 
   async create(dto: CreateDriverDto) {
-    await this.validateCreateBusinessRules(dto);
-    const documentTypeId = await this.resolveDocumentTypeId(dto.document.documentType);
+    const documentsByKind = await this.validateCreateBusinessRules(dto);
 
     return this.prisma.$transaction(async (tx) => {
       const person = await tx.person.create({
@@ -75,22 +82,25 @@ export class DriversService {
         },
       });
 
-      const document = await tx.personDocument.create({
-        data: {
-          documentTypeId,
-          documentNumber: dto.document.documentNumber,
-          description: dto.document.description,
-          status: "ACTIVE",
-        },
-      });
+      for (const [kind, doc] of documentsByKind.entries()) {
+        const documentTypeId = await this.resolveDocumentTypeId(doc.documentType);
+        const document = await tx.personDocument.create({
+          data: {
+            documentTypeId,
+            documentNumber: doc.documentNumber!,
+            description: doc.description,
+            status: "ACTIVE",
+          },
+        });
 
-      await tx.personDocumentLink.create({
-        data: {
-          personId: person.id,
-          personDocumentId: document.id,
-          documentRole: dto.document.documentRole ?? "DRIVER_ID",
-        },
-      });
+        await tx.personDocumentLink.create({
+          data: {
+            personId: person.id,
+            personDocumentId: document.id,
+            documentRole: this.resolveDriverDocumentRole(kind, doc.documentRole),
+          },
+        });
+      }
 
       return this.findOneByIdInternal(tx, person.id);
     });
@@ -150,7 +160,8 @@ export class DriversService {
 
   async update(id: number, dto: UpdateDriverDto) {
     await this.ensureDriverExists(id);
-    await this.validateUpdateBusinessRules(id, dto);
+    const existingDocuments = await this.loadDriverDocumentsByKind(id);
+    await this.validateUpdateBusinessRules(id, dto, existingDocuments);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.person.update({
@@ -166,57 +177,90 @@ export class DriversService {
         },
       });
 
-      if (dto.document) {
-        const existingLink = await tx.personDocumentLink.findFirst({
-          where: { personId: id },
-          orderBy: { id: "asc" },
-          select: { personDocumentId: true },
-        });
+      if (dto.documents?.length) {
+        const documentsByKind = this.collectDriverDocuments(dto.documents).documentsByKind;
+        const requiredKinds: DriverDocumentKind[] = ["CC", "LICENSE"];
 
-        if (!existingLink) {
-          throw new BadRequestException({
-            success: false,
-            message: "No se pudo actualizar el conductor",
-            errors: ["El conductor no tiene documento asociado para actualizar"],
-          });
+        for (const kind of requiredKinds) {
+          if (!documentsByKind.has(kind)) {
+            throw new BadRequestException({
+              success: false,
+              message: "No se pudo actualizar el conductor",
+              errors: ["Debes incluir la cedula y la licencia para actualizar documentos"],
+            });
+          }
         }
 
-        const currentDocument = await tx.personDocument.findUnique({
-          where: { id: existingLink.personDocumentId },
-          select: { documentTypeId: true },
-        });
+        for (const [kind, doc] of documentsByKind.entries()) {
+          const existing = existingDocuments.get(kind);
+          if (existing) {
+            if (
+              doc.documentNumber &&
+              doc.documentNumber !== existing.documentNumber
+            ) {
+              throw new BadRequestException({
+                success: false,
+                message: "No se pudo actualizar el conductor",
+                errors: [
+                  `No puedes modificar el numero de ${this.describeKind(kind)}`,
+                ],
+              });
+            }
 
-        if (!currentDocument) {
-          throw new BadRequestException({
-            success: false,
-            message: "No se pudo actualizar el conductor",
-            errors: ["El documento asociado del conductor no existe"],
-          });
-        }
+            const documentTypeId = doc.documentType
+              ? await this.resolveDocumentTypeId(doc.documentType)
+              : existing.documentTypeId;
 
-        const documentTypeId = dto.document.documentType
-          ? await this.resolveDocumentTypeId(dto.document.documentType)
-          : currentDocument.documentTypeId;
+            await tx.personDocument.update({
+              where: { id: existing.documentId },
+              data: {
+                documentTypeId,
+                description: doc.description,
+                status: "ACTIVE",
+              },
+            });
 
-        await tx.personDocument.update({
-          where: { id: existingLink.personDocumentId },
-          data: {
-            documentTypeId,
-            description: dto.document.description,
-            status: "ACTIVE",
-          },
-        });
+            if (doc.documentRole) {
+              await tx.personDocumentLink.updateMany({
+                where: {
+                  personId: id,
+                  personDocumentId: existing.documentId,
+                },
+                data: {
+                  documentRole: this.resolveDriverDocumentRole(kind, doc.documentRole),
+                },
+              });
+            }
+          } else {
+            if (!doc.documentNumber) {
+              throw new BadRequestException({
+                success: false,
+                message: "No se pudo actualizar el conductor",
+                errors: [
+                  `Debes indicar el numero del documento para ${this.describeKind(kind)}`,
+                ],
+              });
+            }
 
-        if (dto.document.documentRole) {
-          await tx.personDocumentLink.updateMany({
-            where: {
-              personId: id,
-              personDocumentId: existingLink.personDocumentId,
-            },
-            data: {
-              documentRole: dto.document.documentRole,
-            },
-          });
+            const documentTypeId = await this.resolveDocumentTypeId(doc.documentType);
+            const document = await tx.personDocument.create({
+              data: {
+                documentTypeId,
+                documentNumber: doc.documentNumber,
+                description: doc.description,
+                status: "ACTIVE",
+              },
+              select: { id: true },
+            });
+
+            await tx.personDocumentLink.create({
+              data: {
+                personId: id,
+                personDocumentId: document.id,
+                documentRole: this.resolveDriverDocumentRole(kind, doc.documentRole),
+              },
+            });
+          }
         }
       }
 
@@ -255,14 +299,33 @@ export class DriversService {
       }
     }
 
-    const duplicateDoc = await this.prisma.personDocument.findFirst({
-      where: {
-        documentNumber: dto.document.documentNumber,
-      },
-      select: { id: true },
-    });
-    if (duplicateDoc) {
-      errors.push("Ya existe una persona con ese numero de documento");
+    const { documentsByKind, errors: documentErrors } = this.collectDriverDocuments(
+      dto.documents,
+    );
+    errors.push(...documentErrors);
+
+    const missingKinds = this.missingRequiredKinds(documentsByKind);
+    if (missingKinds.includes("CC")) {
+      errors.push("Falta el documento de cedula de ciudadania (CC)");
+    }
+    if (missingKinds.includes("LICENSE")) {
+      errors.push("Falta el documento de licencia de conduccion");
+    }
+
+    for (const doc of documentsByKind.values()) {
+      const duplicateDoc = await this.prisma.personDocument.findFirst({
+        where: {
+          documentNumber: doc.documentNumber,
+        },
+        select: { id: true },
+      });
+      if (duplicateDoc) {
+        errors.push(
+          `Ya existe una persona con el numero de ${this.describeKind(
+            doc.kind,
+          )}`,
+        );
+      }
     }
 
     if (errors.length) {
@@ -272,9 +335,19 @@ export class DriversService {
         errors,
       });
     }
+
+    return documentsByKind;
   }
 
-  private async validateUpdateBusinessRules(id: number, dto: UpdateDriverDto) {
+  private async validateUpdateBusinessRules(
+    id: number,
+    dto: UpdateDriverDto,
+    existingDocuments: Map<DriverDocumentKind, {
+      documentId: number;
+      documentTypeId: number;
+      documentNumber: string;
+    }>,
+  ) {
     const errors: string[] = [];
 
     if (dto.email) {
@@ -290,34 +363,22 @@ export class DriversService {
       }
     }
 
-    if (dto.document && dto.document.documentNumber) {
-      // Obtener el documento actual del conductor
-      const existingLink = await this.prisma.personDocumentLink.findFirst({
-        where: { personId: id },
-        orderBy: { id: "asc" },
-        select: { personDocumentId: true },
-      });
-
-      if (existingLink) {
-        const currentDocument = await this.prisma.personDocument.findUnique({
-          where: { id: existingLink.personDocumentId },
-          select: { documentNumber: true },
-        });
-
-        // Solo rechazar si el documentNumber cambió
-        if (
-          currentDocument &&
-          currentDocument.documentNumber !== dto.document.documentNumber
-        ) {
-          errors.push(
-            "No puedes modificar el numero de documento desde la edicion de conductor",
-          );
-        }
-      }
+    if (existingDocuments.size < 2 && !dto.documents?.length) {
+      errors.push(
+        "Este conductor necesita cedula y licencia para continuar. Completa los documentos.",
+      );
     }
 
-    if (dto.document && dto.document.documentType) {
-      await this.resolveDocumentTypeId(dto.document.documentType);
+    if (dto.documents?.length) {
+      const { documentsByKind, errors: documentErrors } = this.collectDriverDocuments(
+        dto.documents,
+      );
+      errors.push(...documentErrors);
+
+      const missingKinds = this.missingRequiredKinds(documentsByKind);
+      if (missingKinds.length) {
+        errors.push("Debes incluir cedula y licencia al actualizar documentos");
+      }
     }
 
     if (errors.length) {
@@ -400,5 +461,98 @@ export class DriversService {
     }
 
     return documentType.id;
+  }
+
+  private resolveDriverDocumentKind(input: string): DriverDocumentKind | "OTHER" {
+    const normalized = input.trim().toUpperCase();
+    const ccAliases = new Set([
+      "CC",
+      "CEDULA",
+      "CEDULA_DE_CIUDADANIA",
+      "CEDULA DE CIUDADANIA",
+    ]);
+    const licenseAliases = new Set([
+      "LICENCIA",
+      "LICENCIA_CONDUCCION",
+      "LICENCIA DE CONDUCCION",
+    ]);
+
+    if (ccAliases.has(normalized)) return "CC";
+    if (licenseAliases.has(normalized)) return "LICENSE";
+    return "OTHER";
+  }
+
+  private describeKind(kind: DriverDocumentKind) {
+    return kind === "CC" ? "la cedula" : "la licencia";
+  }
+
+  private resolveDriverDocumentRole(kind: DriverDocumentKind, value?: string) {
+    if (value?.trim()) return value.trim();
+    return kind === "CC" ? "DRIVER_ID" : "DRIVER_LICENSE";
+  }
+
+  private collectDriverDocuments(docs: DriverDocumentInput[]) {
+    const documentsByKind = new Map<DriverDocumentKind, DriverDocumentInput & { kind: DriverDocumentKind }>();
+    const errors: string[] = [];
+
+    for (const doc of docs) {
+      const kind = this.resolveDriverDocumentKind(doc.documentType);
+      if (kind === "OTHER") {
+        errors.push("Solo se permiten documentos de cedula y licencia para conductores");
+        continue;
+      }
+
+      if (documentsByKind.has(kind)) {
+        errors.push(`No puedes repetir ${this.describeKind(kind)} en el registro`);
+        continue;
+      }
+
+      documentsByKind.set(kind, { ...doc, kind });
+    }
+
+    return { documentsByKind, errors };
+  }
+
+  private missingRequiredKinds(
+    documentsByKind: Map<DriverDocumentKind, DriverDocumentInput & { kind: DriverDocumentKind }>,
+  ) {
+    const required: DriverDocumentKind[] = ["CC", "LICENSE"];
+    return required.filter((kind) => !documentsByKind.has(kind));
+  }
+
+  private async loadDriverDocumentsByKind(id: number) {
+    const links = await this.prisma.personDocumentLink.findMany({
+      where: { personId: id },
+      select: {
+        personDocument: {
+          select: {
+            id: true,
+            documentNumber: true,
+            documentTypeId: true,
+            documentType: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    const map = new Map<DriverDocumentKind, {
+      documentId: number;
+      documentTypeId: number;
+      documentNumber: string;
+    }>();
+
+    for (const link of links) {
+      const doc = link.personDocument;
+      if (!doc) continue;
+      const kind = this.resolveDriverDocumentKind(doc.documentType.name);
+      if (kind === "OTHER") continue;
+      map.set(kind, {
+        documentId: doc.id,
+        documentTypeId: doc.documentTypeId,
+        documentNumber: doc.documentNumber,
+      });
+    }
+
+    return map;
   }
 }

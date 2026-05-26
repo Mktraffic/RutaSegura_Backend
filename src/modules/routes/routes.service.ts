@@ -724,6 +724,18 @@ export class RoutesService {
       errors.push("El vehiculo indicado no existe");
     } else if (vehicle.status?.toUpperCase() !== "ACTIVE") {
       errors.push("El vehiculo indicado no esta activo");
+    } else {
+      const expiredDocs = await this.findVehicleExpiredDocuments(
+        dto.vehiclePlate,
+      );
+      if (expiredDocs.length) {
+        const suffix = expiredDocs.length > 1 ? "vencidos" : "vencido";
+        errors.push(
+          `No puedes asignar este vehiculo: ${expiredDocs.join(
+            ", ",
+          )} ${suffix}`,
+        );
+      }
     }
 
     const driver = await this.prisma.person.findUnique({
@@ -748,6 +760,12 @@ export class RoutesService {
 
   private async validateUpdateBusinessRules(id: number, dto: UpdateRouteDto) {
     const errors: string[] = [];
+    const current = await this.prisma.route.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+    const effectiveStatus = dto.status ?? current?.status;
+    const isActive = effectiveStatus?.toUpperCase() === "ACTIVE";
 
     if (dto.name) {
       const existingRoute = await this.prisma.route.findFirst({
@@ -799,6 +817,18 @@ export class RoutesService {
         errors.push("El vehiculo indicado no existe");
       } else if (vehicle.status?.toUpperCase() !== "ACTIVE") {
         errors.push("El vehiculo indicado no esta activo");
+      } else if (isActive) {
+        const expiredDocs = await this.findVehicleExpiredDocuments(
+          dto.vehiclePlate,
+        );
+        if (expiredDocs.length) {
+          const suffix = expiredDocs.length > 1 ? "vencidos" : "vencido";
+          errors.push(
+            `No puedes asignar este vehiculo: ${expiredDocs.join(
+              ", ",
+            )} ${suffix}`,
+          );
+        }
       }
     }
 
@@ -867,6 +897,38 @@ export class RoutesService {
         errors,
       });
     }
+  }
+
+  private async findVehicleExpiredDocuments(plate: string) {
+    const normalizedPlate = plate.trim().toUpperCase();
+    const alerts = await this.prisma.documentAlert.findMany({
+      where: {
+        vehiclePlate: normalizedPlate,
+        OR: [{ alertType: "EXPIRED" }, { daysRemaining: { lt: 0 } }],
+      },
+      include: {
+        vehicleDocument: { select: { documentType: true } },
+      },
+    });
+
+    const labels = alerts
+      .map((alert) => this.resolveVehicleDocumentLabel(alert.vehicleDocument?.documentType))
+      .filter((label): label is string => Boolean(label));
+
+    return [...new Set(labels)];
+  }
+
+  private resolveVehicleDocumentLabel(documentType?: string | null) {
+    if (!documentType) return undefined;
+    const normalized = documentType.trim().toUpperCase();
+    const mapping: Record<string, string> = {
+      SOAT: "SOAT",
+      TECHNICAL_INSPECTION: "tecnomecanica",
+      INSURANCE: "seguro",
+      PROPERTY_CARD: "tarjeta de propiedad",
+    };
+
+    return mapping[normalized] ?? documentType.toLowerCase();
   }
 
   // ───────────────────────────────────────────────
