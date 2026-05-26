@@ -138,7 +138,7 @@ describe('JwtStrategy', () => {
         UnauthorizedException,
       );
       await expect(strategy.validate(payload)).rejects.toThrow(
-        'User not found',
+        'No se pudo validar tu sesion porque el usuario no existe',
       );
     });
 
@@ -157,7 +157,7 @@ describe('JwtStrategy', () => {
         UnauthorizedException,
       );
       await expect(strategy.validate(payload)).rejects.toThrow(
-        'User is inactive',
+        'No se pudo validar tu sesion porque el usuario esta inactivo',
       );
     });
   });

@@ -41,6 +41,9 @@ describe('DriversService', () => {
               findFirst: jest.fn(),
               updateMany: jest.fn(),
             },
+            documentType: {
+              findFirst: jest.fn(),
+            },
             $transaction: jest.fn(),
           },
         },
@@ -63,6 +66,10 @@ describe('DriversService', () => {
       jest.spyOn(prismaService, '$transaction' as any).mockImplementationOnce(mockTransaction);
       jest.spyOn(prismaService.person, 'findFirst').mockResolvedValueOnce(null);
       jest.spyOn(prismaService.personDocument, 'findFirst').mockResolvedValueOnce(null);
+      jest.spyOn(prismaService.documentType, 'findFirst').mockResolvedValueOnce({
+        id: 1,
+        name: 'CC',
+      } as any);
 
       const result = await service.create(validCreateDriverDto);
 
@@ -79,6 +86,10 @@ describe('DriversService', () => {
       jest.spyOn(prismaService, '$transaction' as any).mockImplementationOnce(mockTransaction);
       jest.spyOn(prismaService.person, 'findFirst').mockResolvedValueOnce(null);
       jest.spyOn(prismaService.personDocument, 'findFirst').mockResolvedValueOnce(null);
+      jest.spyOn(prismaService.documentType, 'findFirst').mockResolvedValueOnce({
+        id: 1,
+        name: 'CC',
+      } as any);
 
       const result = await service.create(validCreateDriverDtoWithoutOptionals);
 
@@ -99,6 +110,7 @@ describe('DriversService', () => {
     it('should throw BadRequestException when document type does not exist', async () => {
       jest.spyOn(prismaService.person, 'findFirst').mockResolvedValueOnce(null);
       jest.spyOn(prismaService.personDocument, 'findFirst').mockResolvedValueOnce(null);
+      jest.spyOn(prismaService.documentType, 'findFirst').mockResolvedValueOnce(null);
 
       await expect(service.create(validCreateDriverDto)).rejects.toThrow(
         BadRequestException,
@@ -207,7 +219,7 @@ describe('DriversService', () => {
       const updateDto = {
         firstName: 'Carlos',
         document: {
-          documentNumber: '1111111111',
+          documentType: 'CC',
         },
       };
 
@@ -217,6 +229,10 @@ describe('DriversService', () => {
       });
 
       jest.spyOn(prismaService.person, 'findFirst').mockResolvedValueOnce(driverInDatabase as any);
+      jest.spyOn(prismaService.documentType, 'findFirst').mockResolvedValueOnce({
+        id: 1,
+        name: 'CC',
+      } as any);
       jest.spyOn(prismaService, '$transaction' as any).mockImplementationOnce(mockTransaction);
 
       const result = await service.update(1, updateDto);

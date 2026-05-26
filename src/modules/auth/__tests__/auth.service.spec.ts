@@ -236,7 +236,7 @@ describe('AuthService', () => {
       it('T22: Debe obtener perfil de usuario existente', async () => {
         // Arrange
         const userId = 1;
-        (prismaService.user.findUniqueOrThrow as jest.Mock).mockResolvedValue({
+        (prismaService.user.findUnique as jest.Mock).mockResolvedValue({
           id: userId,
           email: 'coordinator@test.com',
           status: 'active',
@@ -279,7 +279,7 @@ describe('AuthService', () => {
             phone: '1234567890',
           },
         };
-        (prismaService.user.findUniqueOrThrow as jest.Mock).mockResolvedValue(
+        (prismaService.user.findUnique as jest.Mock).mockResolvedValue(
           expectedProfile,
         );
 
@@ -293,7 +293,7 @@ describe('AuthService', () => {
       it('T24: Datos personales deben incluir firstName, middleName, lastnames, phone', async () => {
         // Arrange
         const userId = 1;
-        (prismaService.user.findUniqueOrThrow as jest.Mock).mockResolvedValue({
+        (prismaService.user.findUnique as jest.Mock).mockResolvedValue({
           id: userId,
           email: 'coordinator@test.com',
           status: 'active',

@@ -133,14 +133,12 @@ describe('UsersService', () => {
         personType: 'DRIVER',
         status: 'ACTIVE',
       } as any);
-      jest.spyOn(prismaService.role, 'findUnique').mockResolvedValueOnce({
+      // Mock role.findUnique to return role twice (validation + create)
+      jest.spyOn(prismaService.role, 'findUnique').mockResolvedValue({
         id: 2,
         name: 'driver',
       } as any);
       jest.spyOn(prismaService.user, 'findFirst').mockResolvedValueOnce(null);
-      jest.spyOn(prismaService.role, 'findUniqueOrThrow').mockResolvedValueOnce({
-        name: 'driver',
-      } as any);
       jest.spyOn(prismaService.user, 'create').mockResolvedValueOnce(userInDatabase as any);
 
       const result = await service.create(validCreateUserDto);
@@ -159,14 +157,12 @@ describe('UsersService', () => {
         personType: 'COORDINATOR',
         status: 'ACTIVE',
       } as any);
-      jest.spyOn(prismaService.role, 'findUnique').mockResolvedValueOnce({
+      // Mock role.findUnique to return role twice (validation + create)
+      jest.spyOn(prismaService.role, 'findUnique').mockResolvedValue({
         id: 3,
         name: 'coordinator',
       } as any);
       jest.spyOn(prismaService.user, 'findFirst').mockResolvedValueOnce(null);
-      jest.spyOn(prismaService.role, 'findUniqueOrThrow').mockResolvedValueOnce({
-        name: 'coordinator',
-      } as any);
       jest.spyOn(prismaService.user, 'create').mockResolvedValueOnce({
         ...userInDatabase,
         pickupEnabled: false,

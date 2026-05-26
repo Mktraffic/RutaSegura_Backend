@@ -33,8 +33,12 @@ export const guardianInDatabase = {
   status: 'ACTIVE',
   document: {
     id: 1,
-    documentType: 'CC',
     documentNumber: '1234567890',
+    status: 'ACTIVE',
+    documentType: {
+      id: 1,
+      name: 'CC',
+    },
   },
 };
 

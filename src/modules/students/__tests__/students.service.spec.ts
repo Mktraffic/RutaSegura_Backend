@@ -139,6 +139,100 @@ describe('StudentsService', () => {
     });
   });
 
+  describe('findActiveByZone', () => {
+    it('should return active students for a specific zone', async () => {
+      const mockStudents = [
+        {
+          id: 1,
+          personType: 'STUDENT',
+          guardianId: 1,
+          firstName: 'Pedro',
+          status: 'ACTIVE',
+          addresses: [
+            {
+              id: 1,
+              zone: 'LA_RAZA',
+              address: 'Carrera 5 #10-20, Tunja',
+              latitude: 5.548,
+              longitude: -73.36,
+            },
+          ],
+        },
+      ];
+
+      jest.spyOn(prismaService.person, 'findMany').mockResolvedValueOnce(mockStudents as any);
+
+      const result = await service.findActiveByZone(1);
+
+      expect(result).toBeDefined();
+      expect(result).toEqual(mockStudents);
+      expect(prismaService.person.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            personType: 'STUDENT',
+            status: 'ACTIVE',
+            personAddresses: {
+              some: {
+                address: {
+                  zoneId: 1,
+                },
+              },
+            },
+          },
+        }),
+      );
+    });
+
+    it('should return empty array when no active students in zone', async () => {
+      jest.spyOn(prismaService.person, 'findMany').mockResolvedValueOnce([]);
+
+      const result = await service.findActiveByZone(999);
+
+      expect(result).toEqual([]);
+      expect(prismaService.person.findMany).toHaveBeenCalled();
+    });
+
+    it('should filter by zone correctly', async () => {
+      const mockStudents = [
+        {
+          id: 1,
+          personType: 'STUDENT',
+          guardianId: 1,
+          firstName: 'Pedro',
+          status: 'ACTIVE',
+          addresses: [],
+        },
+        {
+          id: 2,
+          personType: 'STUDENT',
+          guardianId: 2,
+          firstName: 'Ana',
+          status: 'ACTIVE',
+          addresses: [],
+        },
+      ];
+
+      jest.spyOn(prismaService.person, 'findMany').mockResolvedValueOnce(mockStudents as any);
+
+      const result = await service.findActiveByZone(5);
+
+      expect(result).toEqual(mockStudents);
+      expect(prismaService.person.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            personAddresses: {
+              some: {
+                address: {
+                  zoneId: 5,
+                },
+              },
+            },
+          }),
+        }),
+      );
+    });
+  });
+
   describe('findOne', () => {
     it('should return a student by id', async () => {
       jest
@@ -214,6 +308,63 @@ describe('StudentsService', () => {
       await expect(
         service.update(1, validUpdateStudentDto),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should handle document update in transaction', async () => {
+      const updateDto = {
+        firstName: 'Carlos',
+      };
+
+      jest
+        .spyOn(prismaService.person, 'findFirst')
+        .mockResolvedValueOnce(studentInDatabase);
+      jest.spyOn(prismaService, '$transaction').mockImplementation(async (callback) => {
+        const mockTx = {
+          person: {
+            update: jest.fn().mockResolvedValueOnce({}),
+          },
+          personDocumentLink: {
+            findFirst: jest.fn().mockResolvedValueOnce(null),
+          },
+          personAddressLink: {
+            findMany: jest.fn().mockResolvedValueOnce([]),
+            deleteMany: jest.fn().mockResolvedValueOnce({ count: 0 }),
+          },
+        };
+        return callback(mockTx as any);
+      });
+      jest.spyOn(service, 'findOneByIdInternal' as any).mockResolvedValueOnce(studentInDatabase);
+
+      const result = await service.update(1, updateDto as any);
+
+      expect(result).toBeDefined();
+    });
+
+    it('should throw BadRequestException when document link not found', async () => {
+      const updateDto = {
+        firstName: 'Juan',
+        document: {
+          documentType: 'Pasaporte',
+        },
+      };
+
+      jest
+        .spyOn(prismaService.person, 'findFirst')
+        .mockResolvedValueOnce(studentInDatabase);
+      jest.spyOn(prismaService, '$transaction').mockImplementation(async (callback) => {
+        return callback({
+          person: {
+            update: jest.fn().mockResolvedValueOnce({}),
+          },
+          personDocumentLink: {
+            findFirst: jest.fn().mockResolvedValueOnce(null),
+          },
+        } as any);
+      });
+
+      await expect(service.update(1, updateDto as any)).rejects.toThrow(
+        BadRequestException
+      );
     });
   });
 
