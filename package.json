@@ -12,6 +12,9 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
+    "sonar": "sonar-scanner",
+    "sonar:analyze": "npm run test:cov && npm run sonar",
+    "verify:sonar": "node verify-sonar-setup.js",
     "prisma": {
       "seed": "ts-node prisma/seed.ts"
     }
@@ -56,6 +59,7 @@
     "@types/pg": "^8.18.0",
     "jest": "^30.3.0",
     "prisma": "^7.5.0",
+    "sonar-scanner": "^3.1.0",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
