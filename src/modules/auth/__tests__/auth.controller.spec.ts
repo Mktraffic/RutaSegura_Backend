@@ -147,6 +147,7 @@ describe('AuthController', () => {
           userId: 1,
           email: 'coordinator@test.com',
           role: 'coordinator',
+          personId: 1,
         });
 
         // Assert
@@ -176,6 +177,7 @@ describe('AuthController', () => {
           userId: 1,
           email: 'coordinator@test.com',
           role: 'coordinator',
+          personId: 1,
         });
 
         // Assert
@@ -209,6 +211,7 @@ describe('AuthController', () => {
           userId: 1,
           email: 'coordinator@test.com',
           role: 'coordinator',
+          personId: 1,
         });
 
         // Assert
@@ -229,7 +232,7 @@ describe('AuthController', () => {
 
         // Act & Assert
         await expect(
-          controller.profile({ userId: 999, email: 'test@test.com', role: 'coordinator' }),
+          controller.profile({ userId: 999, email: 'test@test.com', role: 'coordinator', personId: 1 }),
         ).rejects.toThrow();
       });
 
@@ -257,6 +260,7 @@ describe('AuthController', () => {
           userId: 1,
           email: 'coordinator@test.com',
           role: 'coordinator',
+          personId: 1,
         };
         const result = await controller.profile(currentUser);
 

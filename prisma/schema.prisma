@@ -82,6 +82,9 @@ model PersonDocumentLink {
 model Guardian {
   id             Int      @id @default(autoincrement())
   documentId     Int      @map("document_id")
+  // Persona de login asociada (personType = GUARDIAN) cuando el acudiente
+  // tiene acceso al sistema. Null si es solo dato de contacto.
+  personId       Int?     @unique @map("person_id")
   firstName      String   @map("first_name") @db.VarChar(50)
   middleName     String?  @map("middle_name") @db.VarChar(50)
   firstLastname  String   @map("first_lastname") @db.VarChar(50)
@@ -91,8 +94,9 @@ model Guardian {
   status         String?  @db.VarChar(20)
   createdAt      DateTime @default(now()) @map("created_at")
 
-  document PersonDocument @relation(fields: [documentId], references: [id])
-  persons  Person[]
+  document    PersonDocument @relation(fields: [documentId], references: [id])
+  persons     Person[]       @relation("StudentGuardian")
+  loginPerson Person?        @relation("GuardianLogin", fields: [personId], references: [id])
 
   @@index([documentId])
   @@map("GUARDIAN")
@@ -117,7 +121,8 @@ model Person {
   status         String?  @db.VarChar(20)
   createdAt      DateTime @default(now()) @map("created_at")
 
-  guardian            Guardian?            @relation(fields: [guardianId], references: [id])
+  guardian            Guardian?            @relation("StudentGuardian", fields: [guardianId], references: [id])
+  guardianAccount     Guardian?            @relation("GuardianLogin")
   personDocumentLinks PersonDocumentLink[]
   users               User[]
   personAddresses     PersonAddress[]

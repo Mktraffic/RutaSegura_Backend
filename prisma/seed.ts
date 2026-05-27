@@ -70,6 +70,7 @@ async function main() {
   const roleCoordinator = await prisma.role.create({ data: { name: 'COORDINATOR' } });
   const roleDriver      = await prisma.role.create({ data: { name: 'DRIVER' } });
   const roleAdmin       = await prisma.role.create({ data: { name: 'ADMIN' } });
+  const roleGuardian    = await prisma.role.create({ data: { name: 'GUARDIAN' } });
 
   // ─────────────────────────────────────────────
   // 2. ZONAS
@@ -335,6 +336,24 @@ async function main() {
     data: { email: 'conductor@rutasegura.com', password: hashedPassword,
       personId: driverPerson.id, roleId: roleDriver.id,
       status: 'ACTIVE', pickupEnabled: true },
+  });
+
+  // Acudiente con acceso al sistema: creamos su persona de login (personType
+  // GUARDIAN), el usuario y vinculamos el registro Guardian existente (Carlos,
+  // acudiente de Sofía) para que pueda ver las rutas de su hijo.
+  const guardianLoginPerson = await prisma.person.create({
+    data: { personType: 'GUARDIAN', firstName: 'Carlos',
+      firstLastname: 'Ramírez', secondLastname: 'Gómez',
+      phone: '3101234567', email: 'carlos.ramirez@email.com', status: 'ACTIVE' },
+  });
+  await prisma.guardian.update({
+    where: { id: guardian1.id },
+    data: { personId: guardianLoginPerson.id },
+  });
+  await prisma.user.create({
+    data: { email: 'acudiente@rutasegura.com', password: hashedPassword,
+      personId: guardianLoginPerson.id, roleId: roleGuardian.id,
+      status: 'ACTIVE', pickupEnabled: false },
   });
 
   // ─────────────────────────────────────────────
@@ -603,6 +622,7 @@ async function main() {
   console.log('   Admin:        admin@rutasegura.com       / password123');
   console.log('   Coordinadora: coordinador@rutasegura.com / password123');
   console.log('   Conductor:    conductor@rutasegura.com   / password123');
+  console.log('   Acudiente:    acudiente@rutasegura.com    / password123');
 }
 
 main()

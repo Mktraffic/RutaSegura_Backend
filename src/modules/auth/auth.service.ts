@@ -54,6 +54,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role.name,
+      personId: user.personId,
     };
 
     const expiresInRaw = process.env.JWT_ACCESS_EXPIRES_IN ?? "1h";

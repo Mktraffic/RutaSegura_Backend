@@ -250,6 +250,122 @@ export class RoutesService {
     });
   }
 
+  // ───────────────────────────────────────────────
+  // PORTAL DEL CONDUCTOR
+  // El conductor solo ve y exporta las rutas que tiene asignadas.
+  // ───────────────────────────────────────────────
+
+  async findRoutesForDriver(driverPersonId: number) {
+    return this.prisma.route.findMany({
+      where: { driverPersonId },
+      orderBy: { id: "desc" },
+      include: this.routeInclude,
+    });
+  }
+
+  async findRouteForDriver(routeId: number, driverPersonId: number) {
+    await this.ensureRouteOwnedByDriver(routeId, driverPersonId);
+
+    return this.prisma.route.findUnique({
+      where: { id: routeId },
+      include: this.routeInclude,
+    });
+  }
+
+  async getDriverRouteGoogleMapsUrl(routeId: number, driverPersonId: number) {
+    await this.ensureRouteOwnedByDriver(routeId, driverPersonId);
+    return this.getRouteGoogleMapsUrl(routeId);
+  }
+
+  async getDriverRouteGeoJson(routeId: number, driverPersonId: number) {
+    await this.ensureRouteOwnedByDriver(routeId, driverPersonId);
+    return this.getRouteGeoJson(routeId);
+  }
+
+  private async ensureRouteOwnedByDriver(
+    routeId: number,
+    driverPersonId: number,
+  ) {
+    const route = await this.prisma.route.findFirst({
+      where: { id: routeId, driverPersonId },
+      select: { id: true },
+    });
+
+    if (!route) {
+      throw new NotFoundException({
+        success: false,
+        message: "Ruta no encontrada o no asignada a este conductor",
+      });
+    }
+
+    return route;
+  }
+
+  // ───────────────────────────────────────────────
+  // PORTAL DEL ACUDIENTE (GUARDIAN)
+  // El acudiente ve las rutas que tienen asignados a sus hijos.
+  // ───────────────────────────────────────────────
+
+  async findChildrenRoutesForGuardian(guardianPersonId: number) {
+    const guardian = await this.prisma.guardian.findUnique({
+      where: { personId: guardianPersonId },
+      select: { id: true, firstName: true, firstLastname: true },
+    });
+
+    if (!guardian) {
+      throw new NotFoundException({
+        success: false,
+        message: "No encontramos un acudiente asociado a tu usuario",
+      });
+    }
+
+    const children = await this.prisma.person.findMany({
+      where: { personType: "STUDENT", guardianId: guardian.id },
+      orderBy: [{ firstName: "asc" }, { firstLastname: "asc" }],
+      select: {
+        id: true,
+        firstName: true,
+        middleName: true,
+        firstLastname: true,
+        secondLastname: true,
+        status: true,
+        routeAssignments: {
+          where: { status: "ACTIVE" },
+          select: {
+            id: true,
+            status: true,
+            stop: {
+              select: {
+                id: true,
+                stopOrder: true,
+                description: true,
+                latitude: true,
+                longitude: true,
+                estimatedTime: true,
+              },
+            },
+            route: { include: this.routeInclude },
+          },
+        },
+      },
+    });
+
+    return children.map((child) => ({
+      id: child.id,
+      firstName: child.firstName,
+      middleName: child.middleName,
+      firstLastname: child.firstLastname,
+      secondLastname: child.secondLastname,
+      status: child.status,
+      routes: child.routeAssignments.map((assignment) => ({
+        assignmentId: assignment.id,
+        assignmentStatus: assignment.status,
+        stop: assignment.stop,
+        route: assignment.route,
+      })),
+    }));
+  }
+
   async getFormOptions() {
     const [zones, destinations, vehicles, drivers] = await Promise.all([
       this.prisma.zone.findMany({

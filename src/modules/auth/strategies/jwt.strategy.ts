@@ -27,6 +27,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
         id: true,
         email: true,
         status: true,
+        personId: true,
         role: { select: { name: true } },
       },
     });
@@ -43,6 +44,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
       userId: user.id,
       email: user.email,
       role: user.role.name,
+      personId: user.personId,
     };
   }
 }

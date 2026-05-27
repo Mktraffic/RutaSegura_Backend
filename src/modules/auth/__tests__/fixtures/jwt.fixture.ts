@@ -6,21 +6,25 @@ export const validJwtPayloads = {
     sub: 1,
     email: 'coordinator@test.com',
     role: 'coordinator',
+    personId: 10,
   },
   driver: {
     sub: 2,
     email: 'driver@test.com',
     role: 'driver',
+    personId: 20,
   },
   coordinador: {
     sub: 1,
     email: 'coordinator@test.com',
     role: 'coordinador',
+    personId: 10,
   },
   conductor: {
     sub: 2,
     email: 'driver@test.com',
     role: 'conductor',
+    personId: 20,
   },
 };
 
