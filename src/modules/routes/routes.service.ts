@@ -739,23 +739,30 @@ export class RoutesService {
       });
     }
 
-    const origin = this.formatLatLng(points[0]);
     const destination = this.formatLatLng(points[points.length - 1]);
+    // Paradas intermedias = casas de los estudiantes (se excluye el colegio,
+    // que es el primer y último punto del recorrido planificado).
     const waypoints = points
       .slice(1, -1)
       .map((point) => this.formatLatLng(point));
 
     const url = new URL("https://www.google.com/maps/dir/");
     url.searchParams.set("api", "1");
-    url.searchParams.set("origin", origin);
     url.searchParams.set("destination", destination);
     url.searchParams.set("travelmode", "driving");
     if (waypoints.length) {
       url.searchParams.set("waypoints", waypoints.join("|"));
     }
-    // Modo navegación turn-by-turn (voz/3D) en la app de Google Maps.
+
     if (options?.navigate) {
+      // Navegación turn-by-turn (voz/3D): NO enviamos "origin" para que Google
+      // Maps use "Mi ubicación" (GPS del conductor) y muestre el botón
+      // "Iniciar". El conductor arranca físicamente en el colegio, así que el
+      // recorrido (Mi ubicación → casas → colegio) es equivalente al planificado.
       url.searchParams.set("dir_action", "navigate");
+    } else {
+      // Vista previa (coordinador): el recorrido parte del colegio (sede).
+      url.searchParams.set("origin", this.formatLatLng(points[0]));
     }
 
     return url.toString();
