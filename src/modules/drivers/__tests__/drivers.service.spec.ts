@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { DriversService } from '../drivers.service';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { StorageService } from '../../storage/storage.service';
 import {
   validCreateDriverDto,
   validCreateDriverDtoWithoutOptionals,
@@ -45,6 +46,12 @@ describe('DriversService', () => {
               findFirst: jest.fn(),
             },
             $transaction: jest.fn(),
+          },
+        },
+        {
+          provide: StorageService,
+          useValue: {
+            deleteObject: jest.fn(),
           },
         },
       ],

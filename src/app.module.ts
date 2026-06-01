@@ -7,8 +7,11 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { DocumentManagementModule } from "./modules/document-management/document-management.module";
 import { DriversModule } from "./modules/drivers/drivers.module";
 import { GuardiansModule } from "./modules/guardians/guardians.module";
+import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { RoutesModule } from "./modules/routes/routes.module";
+import { StorageModule } from "./modules/storage/storage.module";
 import { StudentsModule } from "./modules/students/students.module";
+import { TripsModule } from "./modules/trips/trips.module";
 import { UsersModule } from "./modules/users/users.module";
 import { VehiclesModule } from "./modules/vehicles/vehicles.module";
 import { PrismaModule } from "./prisma/prisma.module";
@@ -20,8 +23,11 @@ import { PrismaModule } from "./prisma/prisma.module";
     DocumentManagementModule,
     DriversModule,
     GuardiansModule,
+    NotificationsModule,
     RoutesModule,
+    StorageModule,
     StudentsModule,
+    TripsModule,
     UsersModule,
     VehiclesModule,
   ],

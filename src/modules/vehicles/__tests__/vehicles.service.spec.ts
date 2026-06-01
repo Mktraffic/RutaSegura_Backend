@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { VehiclesService } from '../vehicles.service';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { StorageService } from '../../storage/storage.service';
 import {
   validCreateVehicleDto,
   validCreateVehicleDtoWithoutOptionals,
@@ -35,6 +36,12 @@ describe('VehiclesService', () => {
               update: jest.fn(),
             },
             $transaction: jest.fn(),
+          },
+        },
+        {
+          provide: StorageService,
+          useValue: {
+            deleteObject: jest.fn(),
           },
         },
       ],

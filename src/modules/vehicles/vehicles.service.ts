@@ -5,11 +5,15 @@ import {
 } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { StorageService } from "../storage/storage.service";
 import { CreateVehicleDto, UpdateVehicleDto } from "./dto/vehicle.dto";
 
 @Injectable()
 export class VehiclesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   private readonly vehicleSelect = {
     plate: true,
@@ -230,6 +234,68 @@ export class VehiclesService {
     });
   }
 
+  // Etiquetas legibles de los documentos con vencimiento que bloquean.
+  private static readonly EXPIRABLE_DOC_LABELS: Record<string, string> = {
+    SOAT: "SOAT",
+    TECHNICAL_INSPECTION: "Tecnomecanica",
+    INSURANCE: "Seguro",
+  };
+
+  /**
+   * Verifica que el vehiculo no tenga documentos vencidos (vencimiento <= hoy).
+   * Lanza 400 con el detalle de cada documento vencido. La tarjeta de propiedad
+   * no tiene vencimiento, por lo que no se valida.
+   * Se usa al asignar el vehiculo a una ruta activa y al iniciar un viaje.
+   */
+  async assertDocumentsValid(plate: string): Promise<void> {
+    const normalizedPlate = plate.trim().toUpperCase();
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { plate: normalizedPlate },
+      select: {
+        plate: true,
+        soat: { select: { documentType: true, expiryDate: true } },
+        technicalInspection: {
+          select: { documentType: true, expiryDate: true },
+        },
+        insurance: { select: { documentType: true, expiryDate: true } },
+      },
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException({
+        success: false,
+        message: "Vehiculo no encontrado",
+      });
+    }
+
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+    const expirables = [
+      vehicle.soat,
+      vehicle.technicalInspection,
+      vehicle.insurance,
+    ];
+
+    const expired: string[] = [];
+    for (const doc of expirables) {
+      if (!doc?.expiryDate) continue;
+      const expiry = doc.expiryDate.toISOString().slice(0, 10);
+      if (expiry <= today) {
+        const label =
+          VehiclesService.EXPIRABLE_DOC_LABELS[doc.documentType] ??
+          doc.documentType;
+        expired.push(`${label} vencido (venció el ${expiry})`);
+      }
+    }
+
+    if (expired.length) {
+      throw new BadRequestException({
+        success: false,
+        message: `El vehículo ${normalizedPlate} tiene documentos vencidos y no puede ser asignado ni operar`,
+        errors: expired,
+      });
+    }
+  }
+
   private async validateCreateBusinessRules(dto: CreateVehicleDto) {
     const errors: string[] = [];
     const normalizedPlate = dto.plate.trim().toUpperCase();
@@ -391,6 +457,12 @@ export class VehiclesService {
     },
   ) {
     if (currentDocumentId) {
+      // Si llega un archivo nuevo distinto, borramos el anterior de R2 (best-effort).
+      const previous = await tx.vehicleDocument.findUnique({
+        where: { id: currentDocumentId },
+        select: { fileUrl: true },
+      });
+
       await tx.vehicleDocument.update({
         where: { id: currentDocumentId },
         data: {
@@ -402,6 +474,14 @@ export class VehiclesService {
           status: "ACTIVE",
         },
       });
+
+      if (
+        payload.fileUrl &&
+        previous?.fileUrl &&
+        previous.fileUrl !== payload.fileUrl
+      ) {
+        await this.storage.deleteObject(previous.fileUrl);
+      }
 
       return currentDocumentId;
     }

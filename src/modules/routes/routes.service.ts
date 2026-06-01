@@ -5,6 +5,7 @@ import {
 } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { VehiclesService } from "../vehicles/vehicles.service";
 import {
   CreateRouteAssignmentDto,
   CreateRouteDto,
@@ -28,7 +29,10 @@ type StudentPoint = GeoPoint & {
 
 @Injectable()
 export class RoutesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly vehicles: VehiclesService,
+  ) {}
 
   private readonly routeInclude = {
     zone: {
@@ -122,6 +126,8 @@ export class RoutesService {
 
   async create(dto: CreateRouteDto) {
     await this.validateCreateBusinessRules(dto);
+    // La ruta nace ACTIVA, por lo que el vehiculo no puede tener documentos vencidos.
+    await this.vehicles.assertDocumentsValid(dto.vehiclePlate);
 
     return this.prisma.$transaction(async (tx) => {
       const route = await tx.route.create({
@@ -185,8 +191,17 @@ export class RoutesService {
   }
 
   async update(id: number, dto: UpdateRouteDto) {
-    await this.ensureRouteExists(id);
+    const current = await this.ensureRouteExists(id);
     await this.validateUpdateBusinessRules(id, dto);
+
+    // Si se asigna/cambia el vehiculo y la ruta queda activa, el vehiculo no
+    // puede tener documentos vencidos.
+    if (dto.vehiclePlate) {
+      const effectiveStatus = (dto.status ?? current.status)?.toUpperCase();
+      if (effectiveStatus === "ACTIVE") {
+        await this.vehicles.assertDocumentsValid(dto.vehiclePlate);
+      }
+    }
 
     const updateData: Prisma.RouteUpdateInput = {
       name: dto.name?.trim(),
@@ -241,6 +256,11 @@ export class RoutesService {
         message: "No se pudo activar la ruta",
         errors: ["La ruta ya se encuentra activa"],
       });
+    }
+
+    // Al reactivar la ruta, el vehiculo asignado no puede tener documentos vencidos.
+    if (current.vehiclePlate) {
+      await this.vehicles.assertDocumentsValid(current.vehiclePlate);
     }
 
     return this.prisma.route.update({
@@ -1230,6 +1250,7 @@ export class RoutesService {
         status: true,
         startTime: true,
         endTime: true,
+        vehiclePlate: true,
       },
     });
 

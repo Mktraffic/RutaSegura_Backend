@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { RoutesService } from '../routes.service';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { VehiclesService } from '../../vehicles/vehicles.service';
 import {
   validCreateRouteDto,
   updateRouteDto,
@@ -66,6 +67,12 @@ describe('RoutesService', () => {
               findFirst: jest.fn(),
             },
             $transaction: jest.fn(),
+          },
+        },
+        {
+          provide: VehiclesService,
+          useValue: {
+            assertDocumentsValid: jest.fn(),
           },
         },
       ],

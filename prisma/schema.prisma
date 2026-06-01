@@ -160,9 +160,10 @@ model User {
   pickupEnabled Boolean  @default(false) @map("pickup_enabled")
   createdAt     DateTime @default(now()) @map("created_at")
 
-  person             Person      @relation(fields: [personId], references: [id])
-  role               Role        @relation(fields: [roleId], references: [id])
+  person             Person         @relation(fields: [personId], references: [id])
+  role               Role           @relation(fields: [roleId], references: [id])
   reviewedChecklists Checklist[]
+  notifications      Notification[]
 
   @@unique([email])
   @@index([personId])
@@ -388,22 +389,25 @@ model RouteAssignmentHeadquarters {
 // ─────────────────────────────────────────────
 
 model Trip {
-  id             Int       @id @default(autoincrement())
-  routeId        Int       @map("route_id")
-  vehiclePlate   String    @map("vehicle_plate") @db.VarChar(20)
-  driverPersonId Int       @map("driver_person_id")
-  tripDate       DateTime  @map("trip_date") @db.Date
-  status         String?   @db.VarChar(20)
-  startedAt      DateTime? @map("started_at")
-  endedAt        DateTime? @map("ended_at")
-  observations   String?
-  createdAt      DateTime  @default(now()) @map("created_at")
+  id              Int       @id @default(autoincrement())
+  routeId         Int       @map("route_id")
+  vehiclePlate    String    @map("vehicle_plate") @db.VarChar(20)
+  driverPersonId  Int       @map("driver_person_id")
+  tripDate        DateTime  @map("trip_date") @db.Date
+  // PENDING_CHECKLIST | PENDING_REVIEW | ENABLED | REJECTED | IN_PROGRESS | COMPLETED | CANCELLED
+  status          String?   @db.VarChar(30)
+  startedAt       DateTime? @map("started_at")
+  endedAt         DateTime? @map("ended_at")
+  observations    String?
+  createdByUserId Int?      @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
   route   Route   @relation(fields: [routeId], references: [id])
   vehicle Vehicle @relation(fields: [vehiclePlate], references: [plate])
   driver  Person  @relation(fields: [driverPersonId], references: [id])
 
-  checklist Checklist?
+  checklist     Checklist?
+  notifications Notification[]
 
   @@index([routeId])
   @@index([vehiclePlate])
@@ -427,17 +431,29 @@ model ChecklistTemplate {
 }
 
 model Checklist {
-  id                  Int      @id @default(autoincrement())
-  tripId              Int      @unique @map("trip_id")
-  vehiclePlate        String   @map("vehicle_plate") @db.VarChar(20)
-  reviewedByUserId    Int      @map("reviewed_by_user_id")
-  status              String?  @db.VarChar(20)
-  generalObservations String?  @map("general_observations")
-  createdAt           DateTime @default(now()) @map("created_at")
+  id                  Int       @id @default(autoincrement())
+  tripId              Int       @unique @map("trip_id")
+  vehiclePlate        String    @map("vehicle_plate") @db.VarChar(20)
+  // Null hasta que un coordinador/admin lo revisa (aprueba o rechaza).
+  reviewedByUserId    Int?      @map("reviewed_by_user_id")
+  status              String?   @db.VarChar(20)
+  generalObservations String?   @map("general_observations")
+  // Notas del revisor al aprobar/rechazar.
+  reviewNotes         String?   @map("review_notes")
+  // Evidencias: foto general del vehiculo (con placa visible) y firma digital.
+  // Se guarda la "key" del objeto en R2, no una URL publica.
+  vehiclePhotoKey     String?   @map("vehicle_photo_key") @db.VarChar(300)
+  signatureKey        String?   @map("signature_key") @db.VarChar(300)
+  // Geolocalizacion del conductor al enviar el preoperacional.
+  latitude            Decimal?  @db.Decimal(10, 7)
+  longitude           Decimal?  @db.Decimal(10, 7)
+  submittedAt         DateTime? @map("submitted_at")
+  reviewedAt          DateTime? @map("reviewed_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
 
   trip           Trip    @relation(fields: [tripId], references: [id])
   vehicle        Vehicle @relation(fields: [vehiclePlate], references: [plate])
-  reviewedByUser User    @relation(fields: [reviewedByUserId], references: [id])
+  reviewedByUser User?   @relation(fields: [reviewedByUserId], references: [id])
 
   items ChecklistItem[]
 
@@ -452,11 +468,37 @@ model ChecklistItem {
   itemName     String  @map("item_name") @db.VarChar(100)
   passed       Boolean
   observations String?
+  // Key del objeto en R2 con la foto de evidencia (obligatoria si passed = false).
+  fileUrl      String? @map("file_url") @db.VarChar(300)
 
   checklist Checklist @relation(fields: [checklistId], references: [id])
 
   @@index([checklistId])
   @@map("CHECKLIST_ITEM")
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICACIONES IN-APP
+// type: TRIP_REVIEW | TRIP_APPROVED | TRIP_REJECTED
+// ─────────────────────────────────────────────
+
+model Notification {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  type      String?   @db.VarChar(50)
+  title     String    @db.VarChar(150)
+  message   String?
+  tripId    Int?      @map("trip_id")
+  isRead    Boolean   @default(false) @map("is_read")
+  createdAt DateTime  @default(now()) @map("created_at")
+  readAt    DateTime? @map("read_at")
+
+  user User  @relation(fields: [userId], references: [id])
+  trip Trip? @relation(fields: [tripId], references: [id])
+
+  @@index([userId])
+  @@index([tripId])
+  @@map("NOTIFICATION")
 }
 
 // ─────────────────────────────────────────────

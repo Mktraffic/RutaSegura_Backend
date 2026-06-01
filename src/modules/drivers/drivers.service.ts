@@ -5,11 +5,23 @@ import {
 } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
-import { CreateDriverDto, UpdateDriverDto } from "./dto/driver.dto";
+import { StorageService } from "../storage/storage.service";
+import {
+  CreateDriverDto,
+  DriverLicenseDto,
+  UpdateDriverDto,
+} from "./dto/driver.dto";
+
+// Roles de documento que diferencian la cedula (identidad) de la licencia.
+const IDENTITY_DOCUMENT_ROLE = "DRIVER_ID";
+const LICENSE_DOCUMENT_ROLE = "DRIVER_LICENSE";
 
 @Injectable()
 export class DriversService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   private readonly driverSelect = {
     id: true,
@@ -44,6 +56,9 @@ export class DriversService {
             id: true,
             documentNumber: true,
             description: true,
+            issueDate: true,
+            expiryDate: true,
+            fileUrl: true,
             status: true,
             documentType: {
               select: {
@@ -60,6 +75,12 @@ export class DriversService {
   async create(dto: CreateDriverDto) {
     await this.validateCreateBusinessRules(dto);
     const documentTypeId = await this.resolveDocumentTypeId(dto.document.documentType);
+    const licenseTypeId = dto.license
+      ? await this.resolveDocumentTypeId("LICENCIA")
+      : null;
+    const licenseDates = dto.license
+      ? this.resolveLicenseDates(dto.license)
+      : null;
 
     return this.prisma.$transaction(async (tx) => {
       const person = await tx.person.create({
@@ -88,12 +109,118 @@ export class DriversService {
         data: {
           personId: person.id,
           personDocumentId: document.id,
-          documentRole: dto.document.documentRole ?? "DRIVER_ID",
+          documentRole: dto.document.documentRole ?? IDENTITY_DOCUMENT_ROLE,
         },
       });
 
+      if (dto.license && licenseTypeId) {
+        const license = await tx.personDocument.create({
+          data: {
+            documentTypeId: licenseTypeId,
+            documentNumber: dto.license.documentNumber,
+            description: dto.license.description,
+            issueDate: licenseDates?.issueDate ?? undefined,
+            expiryDate: licenseDates?.expiryDate ?? undefined,
+            fileUrl: dto.license.fileKey,
+            status: "ACTIVE",
+          },
+        });
+
+        await tx.personDocumentLink.create({
+          data: {
+            personId: person.id,
+            personDocumentId: license.id,
+            documentRole: LICENSE_DOCUMENT_ROLE,
+          },
+        });
+      }
+
       return this.findOneByIdInternal(tx, person.id);
     });
+  }
+
+  /**
+   * Crea o reemplaza la licencia de conduccion del conductor.
+   * Si se reemplaza la foto, borra el objeto anterior en R2 (best-effort).
+   */
+  async upsertLicense(personId: number, dto: DriverLicenseDto) {
+    await this.ensureDriverExists(personId);
+
+    // El numero de documento es unico a nivel global de PERSON_DOCUMENT.
+    const duplicate = await this.prisma.personDocument.findFirst({
+      where: {
+        documentNumber: dto.documentNumber,
+        personDocumentLinks: {
+          none: {
+            personId,
+            documentRole: LICENSE_DOCUMENT_ROLE,
+          },
+        },
+      },
+      select: { id: true },
+    });
+    if (duplicate) {
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo guardar la licencia",
+        errors: ["Ya existe un documento con ese numero de licencia"],
+      });
+    }
+
+    const licenseTypeId = await this.resolveDocumentTypeId("LICENCIA");
+    const { issueDate, expiryDate } = this.resolveLicenseDates(dto);
+
+    const existingLink = await this.prisma.personDocumentLink.findFirst({
+      where: { personId, documentRole: LICENSE_DOCUMENT_ROLE },
+      select: {
+        personDocumentId: true,
+        personDocument: { select: { fileUrl: true } },
+      },
+    });
+
+    if (existingLink) {
+      const previousKey = existingLink.personDocument.fileUrl;
+      await this.prisma.personDocument.update({
+        where: { id: existingLink.personDocumentId },
+        data: {
+          documentTypeId: licenseTypeId,
+          documentNumber: dto.documentNumber,
+          description: dto.description,
+          issueDate,
+          expiryDate,
+          ...(dto.fileKey !== undefined ? { fileUrl: dto.fileKey } : {}),
+          status: "ACTIVE",
+        },
+      });
+
+      // Borra la foto anterior solo si llega una nueva distinta.
+      if (dto.fileKey && previousKey && previousKey !== dto.fileKey) {
+        await this.storage.deleteObject(previousKey);
+      }
+    } else {
+      await this.prisma.$transaction(async (tx) => {
+        const license = await tx.personDocument.create({
+          data: {
+            documentTypeId: licenseTypeId,
+            documentNumber: dto.documentNumber,
+            description: dto.description,
+            issueDate: issueDate ?? undefined,
+            expiryDate: expiryDate ?? undefined,
+            fileUrl: dto.fileKey,
+            status: "ACTIVE",
+          },
+        });
+        await tx.personDocumentLink.create({
+          data: {
+            personId,
+            personDocumentId: license.id,
+            documentRole: LICENSE_DOCUMENT_ROLE,
+          },
+        });
+      });
+    }
+
+    return this.findOne(personId);
   }
 
   async findAll(query?: string) {
@@ -168,7 +295,7 @@ export class DriversService {
 
       if (dto.document) {
         const existingLink = await tx.personDocumentLink.findFirst({
-          where: { personId: id },
+          where: { personId: id, documentRole: { not: LICENSE_DOCUMENT_ROLE } },
           orderBy: { id: "asc" },
           select: { personDocumentId: true },
         });
@@ -265,6 +392,22 @@ export class DriversService {
       errors.push("Ya existe una persona con ese numero de documento");
     }
 
+    if (dto.license) {
+      if (dto.license.documentNumber === dto.document.documentNumber) {
+        errors.push(
+          "El numero de licencia no puede ser igual al del documento de identidad",
+        );
+      } else {
+        const duplicateLicense = await this.prisma.personDocument.findFirst({
+          where: { documentNumber: dto.license.documentNumber },
+          select: { id: true },
+        });
+        if (duplicateLicense) {
+          errors.push("Ya existe un documento con ese numero de licencia");
+        }
+      }
+    }
+
     if (errors.length) {
       throw new BadRequestException({
         success: false,
@@ -291,9 +434,9 @@ export class DriversService {
     }
 
     if (dto.document && dto.document.documentNumber) {
-      // Obtener el documento actual del conductor
+      // Obtener el documento de identidad actual del conductor (no la licencia)
       const existingLink = await this.prisma.personDocumentLink.findFirst({
-        where: { personId: id },
+        where: { personId: id, documentRole: { not: LICENSE_DOCUMENT_ROLE } },
         orderBy: { id: "asc" },
         select: { personDocumentId: true },
       });
@@ -356,6 +499,29 @@ export class DriversService {
       },
       select: this.driverSelect,
     });
+  }
+
+  // La licencia de servicio público vence 3 años después de la expedición.
+  // Si llega issueDate, el vencimiento se calcula; si no, se usa expiryDate.
+  private resolveLicenseDates(dto: DriverLicenseDto): {
+    issueDate: Date | null;
+    expiryDate: Date | null;
+  } {
+    if (dto.issueDate) {
+      const issue = new Date(dto.issueDate);
+      const expiry = new Date(
+        Date.UTC(
+          issue.getUTCFullYear() + 3,
+          issue.getUTCMonth(),
+          issue.getUTCDate(),
+        ),
+      );
+      return { issueDate: issue, expiryDate: expiry };
+    }
+    return {
+      issueDate: null,
+      expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : null,
+    };
   }
 
   private async resolveDocumentTypeId(documentTypeName: string) {

@@ -1,4 +1,5 @@
 import {
+  IsDateString,
   IsEmail,
   IsOptional,
   IsString,
@@ -7,6 +8,35 @@ import {
   ValidateNested,
 } from "class-validator";
 import { Type } from "class-transformer";
+
+// Licencia de conduccion del conductor. Documento independiente de la cedula:
+// tiene numero, fecha de vencimiento y foto (key del objeto en R2).
+export class DriverLicenseDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(40)
+  documentNumber!: string;
+
+  // Fecha de expedición. El vencimiento se calcula a +3 años (servicio público).
+  @IsOptional()
+  @IsDateString()
+  issueDate?: string;
+
+  // Solo se usa como respaldo si no se envía issueDate.
+  @IsOptional()
+  @IsDateString()
+  expiryDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  fileKey?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  description?: string;
+}
 
 class DriverDocumentDto {
   @IsString()
@@ -88,6 +118,12 @@ export class CreateDriverDto {
   @ValidateNested()
   @Type(() => DriverDocumentDto)
   document!: DriverDocumentDto;
+
+  // Licencia de conduccion (opcional al crear; se puede subir luego).
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DriverLicenseDto)
+  license?: DriverLicenseDto;
 }
 
 export class UpdateDriverDto {

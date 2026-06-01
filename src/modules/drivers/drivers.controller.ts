@@ -12,7 +12,11 @@ import {
   Query,
 } from "@nestjs/common";
 import { Roles } from "../../common/decorators/roles.decorator";
-import { CreateDriverDto, UpdateDriverDto } from "./dto/driver.dto";
+import {
+  CreateDriverDto,
+  DriverLicenseDto,
+  UpdateDriverDto,
+} from "./dto/driver.dto";
 import { DriversService } from "./drivers.service";
 
 @Controller("drivers")
@@ -60,6 +64,19 @@ export class DriversController {
     return {
       success: true,
       message: "Conductor actualizado correctamente",
+      data: driver,
+    };
+  }
+
+  @Patch(":id/license")
+  async upsertLicense(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: DriverLicenseDto,
+  ) {
+    const driver = await this.driversService.upsertLicense(id, dto);
+    return {
+      success: true,
+      message: "Licencia del conductor guardada correctamente",
       data: driver,
     };
   }
