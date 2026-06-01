@@ -63,6 +63,16 @@ export class UsersController {
     };
   }
 
+  @Get("catalog/available-guardians")
+  async findAvailableGuardians() {
+    const guardians = await this.usersService.findAvailableGuardians();
+    return {
+      success: true,
+      message: "Acudientes sin usuario de acceso",
+      data: guardians,
+    };
+  }
+
   @Get(":id")
   async findOne(@Param("id", ParseIntPipe) id: number) {
     const user = await this.usersService.findOne(id);

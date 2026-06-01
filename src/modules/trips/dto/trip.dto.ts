@@ -118,3 +118,15 @@ export class CancelTripDto {
   @MaxLength(1000)
   reason?: string;
 }
+
+export class UpdateTripLocationDto {
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude!: number;
+
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude!: number;
+}

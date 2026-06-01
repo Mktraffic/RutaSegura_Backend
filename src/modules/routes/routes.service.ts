@@ -302,6 +302,12 @@ export class RoutesService {
     return this.getRouteGeoJson(routeId);
   }
 
+  // URL de Google Maps en modo navegación (voz/3D) para iniciar el recorrido.
+  async getDriverRouteNavigationUrl(routeId: number, driverPersonId: number) {
+    await this.ensureRouteOwnedByDriver(routeId, driverPersonId);
+    return this.getRouteGoogleMapsUrl(routeId, { navigate: true });
+  }
+
   private async ensureRouteOwnedByDriver(
     routeId: number,
     driverPersonId: number,
@@ -708,7 +714,10 @@ export class RoutesService {
     };
   }
 
-  async getRouteGoogleMapsUrl(routeId: number) {
+  async getRouteGoogleMapsUrl(
+    routeId: number,
+    options?: { navigate?: boolean },
+  ) {
     const route = await this.prisma.route.findUnique({
       where: { id: routeId },
       select: { routeWaypoints: true },
@@ -740,8 +749,13 @@ export class RoutesService {
     url.searchParams.set("api", "1");
     url.searchParams.set("origin", origin);
     url.searchParams.set("destination", destination);
+    url.searchParams.set("travelmode", "driving");
     if (waypoints.length) {
       url.searchParams.set("waypoints", waypoints.join("|"));
+    }
+    // Modo navegación turn-by-turn (voz/3D) en la app de Google Maps.
+    if (options?.navigate) {
+      url.searchParams.set("dir_action", "navigate");
     }
 
     return url.toString();

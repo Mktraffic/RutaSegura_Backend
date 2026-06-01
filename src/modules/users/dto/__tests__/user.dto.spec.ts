@@ -18,7 +18,7 @@ describe('CreateUserDto', () => {
     expect(errors.length).toBe(0);
   });
 
-  it('should fail validation when personId is missing', async () => {
+  it('should allow omitting personId (guardian flow uses guardianId; the service enforces it)', async () => {
     const plainObject = {
       email: 'user@example.com',
       password: 'securePassword123',
@@ -28,8 +28,22 @@ describe('CreateUserDto', () => {
     const dto = plainToClass(CreateUserDto, plainObject);
     const errors = await validate(dto);
 
-    expect(errors.length).toBeGreaterThan(0);
-    expect(errors.some((e) => e.property === 'personId')).toBe(true);
+    // personId es opcional a nivel DTO: para acudientes se envía guardianId.
+    expect(errors.some((e) => e.property === 'personId')).toBe(false);
+  });
+
+  it('should accept a guardianId instead of personId', async () => {
+    const plainObject = {
+      email: 'guardian@example.com',
+      password: 'securePassword123',
+      roleId: 4,
+      guardianId: 2,
+    };
+
+    const dto = plainToClass(CreateUserDto, plainObject);
+    const errors = await validate(dto);
+
+    expect(errors.length).toBe(0);
   });
 
   it('should fail validation when email is invalid', async () => {

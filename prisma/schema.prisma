@@ -400,6 +400,10 @@ model Trip {
   endedAt         DateTime? @map("ended_at")
   observations    String?
   createdByUserId Int?      @map("created_by_user_id")
+  // Última ubicación del bus reportada por el conductor (viaje en curso).
+  currentLatitude   Decimal?  @map("current_latitude") @db.Decimal(10, 7)
+  currentLongitude  Decimal?  @map("current_longitude") @db.Decimal(10, 7)
+  locationUpdatedAt DateTime? @map("location_updated_at")
   createdAt       DateTime  @default(now()) @map("created_at")
 
   route   Route   @relation(fields: [routeId], references: [id])

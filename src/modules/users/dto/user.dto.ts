@@ -20,10 +20,20 @@ export class CreateUserDto {
   @MaxLength(255)
   password!: string;
 
+  // Para conductor/coordinador/admin se envía la persona existente.
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  personId!: number;
+  personId?: number;
+
+  // Para el rol acudiente se envía el acudiente (Guardian); el backend crea/
+  // enlaza su persona de login automáticamente.
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  guardianId?: number;
 
   @Type(() => Number)
   @IsInt()

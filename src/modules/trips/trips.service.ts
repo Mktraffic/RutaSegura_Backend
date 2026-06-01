@@ -460,6 +460,131 @@ export class TripsService {
     return this.findOne(id);
   }
 
+  // El conductor reporta su ubicación (solo viaje propio y en curso).
+  // Consulta liviana: se llama con frecuencia durante el recorrido.
+  async updateLocation(
+    id: number,
+    driverPersonId: number,
+    dto: { latitude: number; longitude: number },
+  ) {
+    const trip = await this.prisma.trip.findUnique({
+      where: { id },
+      select: { id: true, driverPersonId: true, status: true },
+    });
+    if (!trip) {
+      throw new NotFoundException({
+        success: false,
+        message: "Viaje no encontrado",
+      });
+    }
+    if (trip.driverPersonId !== driverPersonId) {
+      throw new ForbiddenException({
+        success: false,
+        message: "No tienes acceso a este viaje",
+      });
+    }
+    if (trip.status?.toUpperCase() !== TRIP_STATUS.IN_PROGRESS) {
+      throw new BadRequestException({
+        success: false,
+        message: "No se pudo registrar la ubicación",
+        errors: ["Solo puedes compartir ubicación de un viaje en curso"],
+      });
+    }
+
+    await this.prisma.trip.update({
+      where: { id },
+      data: {
+        currentLatitude: dto.latitude,
+        currentLongitude: dto.longitude,
+        locationUpdatedAt: new Date(),
+      },
+    });
+
+    return { latitude: dto.latitude, longitude: dto.longitude };
+  }
+
+  // Viajes en curso de las rutas a las que están asignados los hijos del
+  // acudiente, con la última posición del bus.
+  async findActiveTripsForGuardian(guardianPersonId: number) {
+    const guardian = await this.prisma.guardian.findUnique({
+      where: { personId: guardianPersonId },
+      select: { id: true },
+    });
+    if (!guardian) {
+      throw new NotFoundException({
+        success: false,
+        message: "No encontramos un acudiente asociado a tu usuario",
+      });
+    }
+
+    const children = await this.prisma.person.findMany({
+      where: { personType: "STUDENT", guardianId: guardian.id },
+      select: {
+        firstName: true,
+        middleName: true,
+        firstLastname: true,
+        secondLastname: true,
+        routeAssignments: {
+          where: { status: "ACTIVE" },
+          select: { routeId: true },
+        },
+      },
+    });
+
+    // routeId -> nombres de los hijos del acudiente en esa ruta.
+    const childrenByRoute = new Map<number, string[]>();
+    for (const child of children) {
+      const name = this.fullName(child);
+      for (const assignment of child.routeAssignments) {
+        const list = childrenByRoute.get(assignment.routeId) ?? [];
+        list.push(name);
+        childrenByRoute.set(assignment.routeId, list);
+      }
+    }
+
+    const routeIds = [...childrenByRoute.keys()];
+    if (!routeIds.length) return [];
+
+    const trips = await this.prisma.trip.findMany({
+      where: { routeId: { in: routeIds }, status: TRIP_STATUS.IN_PROGRESS },
+      orderBy: { startedAt: "desc" },
+      select: {
+        id: true,
+        routeId: true,
+        startedAt: true,
+        currentLatitude: true,
+        currentLongitude: true,
+        locationUpdatedAt: true,
+        route: { select: { id: true, name: true } },
+        vehicle: { select: { plate: true, brand: true, model: true } },
+        driver: {
+          select: {
+            firstName: true,
+            middleName: true,
+            firstLastname: true,
+            secondLastname: true,
+          },
+        },
+      },
+    });
+
+    return trips.map((trip) => ({
+      tripId: trip.id,
+      routeId: trip.routeId,
+      routeName: trip.route.name,
+      vehiclePlate: trip.vehicle.plate,
+      vehicleLabel: [trip.vehicle.brand, trip.vehicle.model]
+        .filter(Boolean)
+        .join(" "),
+      driverName: this.fullName(trip.driver),
+      startedAt: trip.startedAt,
+      latitude: trip.currentLatitude ? Number(trip.currentLatitude) : null,
+      longitude: trip.currentLongitude ? Number(trip.currentLongitude) : null,
+      locationUpdatedAt: trip.locationUpdatedAt,
+      children: childrenByRoute.get(trip.routeId) ?? [],
+    }));
+  }
+
   async finish(id: number, driverPersonId: number, dto: FinishTripDto) {
     const trip = await this.ensureTripOwnedByDriver(id, driverPersonId);
     if (trip.status?.toUpperCase() !== TRIP_STATUS.IN_PROGRESS) {

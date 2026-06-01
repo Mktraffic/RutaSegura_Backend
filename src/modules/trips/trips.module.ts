@@ -4,6 +4,7 @@ import { StorageModule } from "../storage/storage.module";
 import { VehiclesModule } from "../vehicles/vehicles.module";
 import { ChecklistTemplateController } from "./checklist-template.controller";
 import { DriverTripsController } from "./driver-trips.controller";
+import { GuardianTripsController } from "./guardian-trips.controller";
 import { TripsController } from "./trips.controller";
 import { TripsService } from "./trips.service";
 
@@ -12,6 +13,7 @@ import { TripsService } from "./trips.service";
   controllers: [
     TripsController,
     DriverTripsController,
+    GuardianTripsController,
     ChecklistTemplateController,
   ],
   providers: [TripsService],

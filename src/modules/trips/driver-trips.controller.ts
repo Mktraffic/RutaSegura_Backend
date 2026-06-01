@@ -16,6 +16,7 @@ import { RequestUser } from "../auth/interfaces/jwt-payload.interface";
 import {
   FinishTripDto,
   SubmitChecklistDto,
+  UpdateTripLocationDto,
 } from "./dto/trip.dto";
 import { TripsService } from "./trips.service";
 
@@ -86,6 +87,25 @@ export class DriverTripsController {
       success: true,
       message: "Viaje iniciado",
       data: trip,
+    };
+  }
+
+  @Patch(":id/location")
+  @HttpCode(HttpStatus.OK)
+  async updateLocation(
+    @CurrentUser() user: RequestUser,
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: UpdateTripLocationDto,
+  ) {
+    const data = await this.tripsService.updateLocation(
+      id,
+      user.personId,
+      dto,
+    );
+    return {
+      success: true,
+      message: "Ubicación registrada",
+      data,
     };
   }
 

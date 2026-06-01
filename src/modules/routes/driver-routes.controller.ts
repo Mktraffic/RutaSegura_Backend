@@ -52,6 +52,22 @@ export class DriverRoutesController {
     };
   }
 
+  @Get(":id/navigation")
+  async getNavigationUrl(
+    @CurrentUser() user: RequestUser,
+    @Param("id", ParseIntPipe) id: number,
+  ) {
+    const url = await this.routesService.getDriverRouteNavigationUrl(
+      id,
+      user.personId,
+    );
+    return {
+      success: true,
+      message: "URL de navegación",
+      data: { url },
+    };
+  }
+
   @Get(":id/geojson")
   async getGeoJson(
     @CurrentUser() user: RequestUser,
